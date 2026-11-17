@@ -10,4 +10,9 @@
     <!-- Only the .NET 10 SDK may be installed; it still builds net8.0 targets. -->
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
   </PropertyGroup>
+
+  <!-- Release builds carry their symbols inside the dll/exe, so the single-file publish is one file. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
 </Project>
