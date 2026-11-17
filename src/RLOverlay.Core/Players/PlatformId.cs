@@ -1,3 +1,5 @@
+﻿using System.Text.Json.Serialization;
+
 namespace RLOverlay.Core.Players;
 
 public enum Platform
@@ -18,18 +20,23 @@ public enum Platform
 public sealed record PlatformId(Platform Platform, string Uid, int Splitscreen, string DisplayName, string RawPrimaryId)
 {
     /// <summary>Bots and players without a usable id.</summary>
+    [JsonIgnore]
     public bool IsBot => string.IsNullOrWhiteSpace(RawPrimaryId) || Uid is "" or "0";
 
     /// <summary>Split-screen guests share the host's account, so their stats cannot be looked up.</summary>
+    [JsonIgnore]
     public bool IsSplitscreenGuest => Splitscreen > 0;
 
     /// <summary>True when a stats lookup and a profile link make sense for this player.</summary>
+    [JsonIgnore]
     public bool CanLookup => !IsBot && !IsSplitscreenGuest && Platform != Platform.Unknown;
 
     /// <summary>Stable key for caches: normalised platform, uid and split-screen index.</summary>
+    [JsonIgnore]
     public string CacheKey => $"{Platform}|{Uid}|{Splitscreen}".ToLowerInvariant();
 
     /// <summary>Short label shown next to the name (STEAM, EPIC, PSN, XBL, SWITCH).</summary>
+    [JsonIgnore]
     public string BadgeText => Platform switch
     {
         Platform.Steam => "STEAM",
@@ -63,7 +70,7 @@ public sealed record PlatformId(Platform Platform, string Uid, int Splitscreen, 
 
     /// <summary>
     /// Only "Steam" and "Epic" appear in the official docs. The other spellings are best guesses
-    /// (see docs/STATS_API_NOTES.md §8) and are matched case-insensitively.
+    /// (see docs/STATS_API_NOTES.md section 8) and are matched case-insensitively.
     /// </summary>
     public static Platform ParsePlatform(string? value)
     {
