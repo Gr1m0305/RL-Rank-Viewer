@@ -32,19 +32,29 @@ Rocket League uses Easy Anti-Cheat. This app is a completely separate process:
 
 ## Where player ranks come from: read this
 
-Rank and MMR data comes from a pluggable stats provider. The app ships a `TrackerGgProvider` that uses Tracker
-Network's official developer API with **your own API key**. Be aware:
+Psyonix has no public rank API and Tracker Network doesn't give out Rocket League access, so live ranks come from a
+third-party service you subscribe to yourself. Settings → *Player stats* offers three sources:
 
-* Tracker Network's developer API requires a key, and Rocket League has **not** been offered to public keys
-  (a maintainer said in 2024 they are not allowed to offer a Rocket League API; Rocket League is not in their list of
-  supported titles; the developer portal returned 404 when this was written).
-* The tracker.gg website's internal endpoints are protected and their Terms of Service restrict scraping. This app
-  does not scrape or get around that protection.
+* **Rocket League API on RapidAPI** (the default, `RocketLeagueApiProvider`): every player's current rank, division,
+  MMR and **peak MMR** in each playlist, looked up by platform and name (Steam: SteamID64 first, then the name). It is
+  run by an independent developer (TonyKun7), not by Psyonix or Tracker Network, and doesn't say where its data
+  comes from. It receives the name and platform of every player the app looks up. To set it up:
+  1. Sign in at [rapidapi.com](https://rapidapi.com/TonyKun7/api/rocket-league10/pricing) and subscribe to a plan.
+     *Basic* is free with 10 lookups a day (about two 2v2 lobbies); *Pro* is $9.99 a month for 2,000 lookups, then
+     $0.01 each (prices when this was written).
+  2. Copy your RapidAPI key (the `X-RapidAPI-Key` value on the API's page) into Settings → *Player stats* and press
+     **Save**. It is stored encrypted for your Windows account.
 
-So with a public key the provider will most likely return *No data*. Names, platforms and teams still come from the
-game, and clicking a name still opens the profile. The provider is an interface (`IPlayerStatsProvider`) so a
-sanctioned data source can be dropped in later. *Test data* in Settings, the `--demo` flag and the *Preview* button
-use a built-in mock provider so you can see the overlay without a key.
+  Each new player in a lobby, you included, costs one lookup (a Steam player whose ID isn't found costs two).
+  Players you meet again within *Keep looked-up players for* (10 minutes by default) cost nothing. *Lookups per
+  month* (2,000 by default) stops lookups before a paid plan starts charging overage; 0 turns the cap off.
+* **tracker.gg API** (`TrackerGgProvider`) with your own Tracker Network key. Their developer portal is down and
+  Rocket League isn't offered to public keys, so this most likely shows *No data*; it stays in case that changes.
+  The app never scrapes the tracker.gg website.
+* **Test data** (`MockStatsProvider`): made-up numbers, no account. The `--demo` flag and the *Preview* button use
+  it too.
+
+Names, platforms and teams always come from the game, and clicking a name opens the player's tracker.gg profile.
 
 ## Requirements
 
@@ -99,8 +109,8 @@ and need no .NET install. They are not code-signed, so Windows SmartScreen may w
 
 3. **Set the game to Borderless.** Rocket League → Settings → Video → *Display Mode* → **Borderless** (or Windowed).
    In exclusive fullscreen the overlay can't be drawn on top; the app tells you once if it sees that.
-4. **Choose the stats source.** Settings → *Player stats*: paste a tracker.gg API key if you have one with Rocket
-   League access (it is stored encrypted for your Windows account), or pick *Test data* to see made-up numbers.
+4. **Choose the stats source.** Settings → *Player stats*: paste your RapidAPI key for the Rocket League API (see
+   "Where player ranks come from" above), or pick *Test data* to see made-up numbers.
 5. *Start with Windows* (Settings → *General*) is on if you kept the setup default. Press **Save** after changes.
 
 Settings → *Game connection* shows a green dot and "Connected to Rocket League" once the game is running with the
@@ -131,7 +141,7 @@ Right-click the tray icon for *Show/Hide panel*, **Settings…**, *Enable Stats 
 double-click opens Settings. Starting the exe again while it runs also opens Settings in the running copy.
 
 The settings window covers the game connection (Stats API status per ini file, *Enable Stats API…*, the port), the
-stats source and API key, which playlists `Ctrl+G` cycles through and the default, which columns to show, the two
+stats source, API keys and monthly lookup cap, which playlists `Ctrl+G` cycles through and the default, which columns to show, the two
 shortcuts (click a field and press the new combination), position and size, rank icon downloads, and *Start with
 Windows*. **Preview** shows the panel with a sample lobby while you adjust it; nothing is kept until you press
 **Save**.
@@ -179,6 +189,7 @@ dotnet test RLOverlay.sln
 | Panel never appears | Settings → *Game connection*: is the Stats API **On**? Restart the game after enabling it. Make sure the game is Borderless/Windowed. Check the logs (tray → *Open logs folder*). |
 | "Waiting for the Stats API" while the game runs | The game was started before the ini was changed (restart it), or the port differs: leave *Stats API port* empty to read it from the ini. |
 | Rows say *No data* | The stats provider has nothing for that player (see "Where player ranks come from"). Use *Test data* to check the overlay itself. |
+| *No data* for everyone with the Rocket League API | Check the log (tray → *Open logs folder*): 401/403 or "not subscribed" = wrong key or no plan on RapidAPI; "allowance is used up" = your plan's requests for the day or month are spent; "Monthly lookup limit reached" = the app's own cap (Settings → *Lookups per month*). |
 | Shortcuts do nothing | They only work while Rocket League is in front. If another app already uses the combination, the log says so; pick another in Settings. |
 | Panel in the wrong place | Settings → *Position and size*, with **Preview** on to see it move. |
 | Placeholder icons instead of the real ones | The first start downloads them; check the internet connection, or Settings → *Rank icons* → *Download again*. |
@@ -187,9 +198,10 @@ dotnet test RLOverlay.sln
 
 | Path | Contents |
 |---|---|
-| `%LOCALAPPDATA%\RLOverlay\settings.json` | settings (API key encrypted with Windows DPAPI for your account) |
+| `%LOCALAPPDATA%\RLOverlay\settings.json` | settings (API keys encrypted with Windows DPAPI for your account) |
 | `%LOCALAPPDATA%\RLOverlay\logs\` | daily logs, 7 kept |
 | `%LOCALAPPDATA%\RLOverlay\cache\` | looked-up players and the downloaded rank icons |
+| `%LOCALAPPDATA%\RLOverlay\rocket-league-api-usage.json` | Rocket League API lookups made this month (for the cap) |
 | `%LOCALAPPDATA%\RLOverlay\ranks\` | your own rank icons, if you want to replace the downloaded ones |
 
 **Uninstall:** *Settings → Apps → Gr1m's RL Overlay → Uninstall* (tick the box to delete settings too). For the

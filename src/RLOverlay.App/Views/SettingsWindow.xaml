@@ -111,8 +111,33 @@
                 <TextBlock Text="PLAYER STATS" Style="{StaticResource SectionHeader}" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
+                        <RadioButton Content="Rocket League API on RapidAPI (live MMR and peak)" GroupName="Provider" Style="{StaticResource Radio}"
+                                     IsChecked="{Binding UseRocketLeagueApi}" />
+                        <StackPanel Margin="28,10,0,0" IsEnabled="{Binding UseRocketLeagueApi}">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Remove key" Style="{StaticResource LinkButton}" Command="{Binding RemoveRlApiKeyCommand}"
+                                        VerticalAlignment="Center" Margin="14,0,0,0"
+                                        Visibility="{Binding HasStoredRlApiKey, Converter={StaticResource BoolToVisibility}}" />
+                                <PasswordBox x:Name="RlApiKeyBox" Style="{StaticResource SecretField}" AutomationProperties.Name="Rocket League API key" PasswordChanged="OnRlApiKeyChanged" />
+                            </DockPanel>
+                            <TextBlock Text="{Binding RlApiKeyStatus}" Style="{StaticResource Hint}" Margin="0,6,0,0" />
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                                       Text="Current rank, MMR and peak MMR for everyone in the lobby. A third-party service (not Psyonix or tracker.gg) that gets each player's name and platform. Free plan: 10 lookups a day." />
+                            <Button Content="Get a key at rapidapi.com" Style="{StaticResource LinkButton}" Command="{Binding GetRlApiKeyCommand}"
+                                    HorizontalAlignment="Left" Margin="0,6,0,0" />
+                            <DockPanel Margin="0,12,0,0">
+                                <TextBox DockPanel.Dock="Right" Width="100" Style="{StaticResource Field}" VerticalAlignment="Center"
+                                         AutomationProperties.Name="Lookups per month"
+                                         Text="{Binding MaxLookupsPerMonth, UpdateSourceTrigger=PropertyChanged}" />
+                                <StackPanel>
+                                    <TextBlock Text="Lookups per month (at most)" Style="{StaticResource Label}" />
+                                    <TextBlock Text="{Binding LookupUsage}" Style="{StaticResource Hint}" />
+                                    <TextBlock Text="Paid plans charge for lookups over their allowance. 0 = no limit." Style="{StaticResource Hint}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </StackPanel>
                         <RadioButton Content="tracker.gg API (your own key)" GroupName="Provider" Style="{StaticResource Radio}"
-                                     IsChecked="{Binding UseTrackerGg}" />
+                                     IsChecked="{Binding UseTrackerGg}" Margin="0,14,0,0" />
                         <StackPanel Margin="28,10,0,0" IsEnabled="{Binding UseTrackerGg}">
                             <DockPanel>
                                 <Button DockPanel.Dock="Right" Content="Remove key" Style="{StaticResource LinkButton}" Command="{Binding RemoveKeyCommand}"
@@ -142,7 +167,7 @@
                             </Grid.RowDefinitions>
                             <StackPanel>
                                 <TextBlock Text="Keep looked-up players for (minutes)" Style="{StaticResource Label}" />
-                                <TextBlock Text="Re-joining the same players doesn't ask again within this time." Style="{StaticResource Hint}" />
+                                <TextBlock Text="Meeting the same players again within this time reuses their numbers instead of another lookup, so their MMR can be up to this old." Style="{StaticResource Hint}" />
                             </StackPanel>
                             <TextBox Grid.Column="1" Width="100" Style="{StaticResource Field}" VerticalAlignment="Center"
                                      Text="{Binding CacheTtlMinutes, UpdateSourceTrigger=PropertyChanged}" />

@@ -15,6 +15,9 @@ internal static class AppPaths
 
     public static string RankCacheDir => Path.Combine(Root, "cache", "ranks");
 
+    /// <summary>How many Rocket League API requests were made this month (see <c>LookupBudget</c>).</summary>
+    public static string LookupUsageFile => Path.Combine(Root, "rocket-league-api-usage.json");
+
     /// <summary>User override folder for rank icons (wins over the exe folder).</summary>
     public static string RankOverrideDir => Path.Combine(Root, "ranks");
 

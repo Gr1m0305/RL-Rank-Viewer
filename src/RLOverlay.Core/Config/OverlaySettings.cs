@@ -34,10 +34,19 @@ public sealed class OverlaySettings
     public double Scale { get; set; } = 1.0;
 
     // Data provider
-    public string Provider { get; set; } = ProviderNames.TrackerGg;
+    public string Provider { get; set; } = ProviderNames.RocketLeagueApi;
 
     /// <summary>tracker.gg API key, encrypted with Windows DPAPI (current user), base64. Never stored in plain text.</summary>
     public string? ProtectedApiKey { get; set; }
+
+    /// <summary>RapidAPI key for the Rocket League API, encrypted the same way as <see cref="ProtectedApiKey"/>.</summary>
+    public string? ProtectedRocketLeagueApiKey { get; set; }
+
+    /// <summary>
+    /// At most this many Rocket League API requests per calendar month (0 = no limit). Paid RapidAPI plans charge for
+    /// requests over their allowance, so this defaults to the Pro plan's 2,000.
+    /// </summary>
+    public int MaxLookupsPerMonth { get; set; } = 2000;
 
     public int CacheTtlMinutes { get; set; } = 10;
 
@@ -68,6 +77,7 @@ public sealed class OverlaySettings
         OffsetY = double.IsFinite(OffsetY) ? Math.Clamp(OffsetY, -4000, 4000) : 0;
         CacheTtlMinutes = Math.Clamp(CacheTtlMinutes, 1, 24 * 60);
         RequestsPerMinute = Math.Clamp(RequestsPerMinute, 1, 600);
+        MaxLookupsPerMonth = Math.Clamp(MaxLookupsPerMonth, 0, 1_000_000);
         EnabledPlaylists = (EnabledPlaylists ?? []).Where(Enum.IsDefined).Distinct().OrderBy(p => p).ToList();
         if (EnabledPlaylists.Count == 0)
         {
@@ -90,9 +100,9 @@ public sealed class OverlaySettings
             CycleHotkey = "Ctrl+G";
         }
 
-        if (Provider is not (ProviderNames.TrackerGg or ProviderNames.Mock))
+        if (Provider is not (ProviderNames.RocketLeagueApi or ProviderNames.TrackerGg or ProviderNames.Mock))
         {
-            Provider = ProviderNames.TrackerGg;
+            Provider = ProviderNames.RocketLeagueApi;
         }
 
         if (StatsApiPort is { } port && (port <= 0 || port > 65535))
@@ -129,6 +139,9 @@ public sealed class StatColumns
 
 public static class ProviderNames
 {
+    /// <summary>The Rocket League API on RapidAPI (live rank, MMR and peak MMR).</summary>
+    public const string RocketLeagueApi = "RocketLeagueApi";
+
     public const string TrackerGg = "TrackerGg";
     public const string Mock = "Mock";
 }

@@ -13,7 +13,11 @@ internal sealed class SampleSettingsHost : ISettingsHost
 
     public OverlaySettings Current { get; } = new();
 
-    public bool HasApiKey => true;
+    public bool HasApiKey => false;
+
+    public bool HasRocketLeagueApiKey => true;
+
+    public int LookupsThisMonth => 412;
 
     public bool RunAtStartup => true;
 
@@ -31,7 +35,7 @@ internal sealed class SampleSettingsHost : ISettingsHost
     {
     }
 
-    public void Save(OverlaySettings settings, string? newApiKey, bool clearApiKey, bool runAtStartup)
+    public void Save(OverlaySettings settings, ApiKeyEdit trackerGgKey, ApiKeyEdit rocketLeagueApiKey, bool runAtStartup)
     {
     }
 

@@ -38,6 +38,7 @@ public partial class App : Application
     private HttpClient? _http;
     private RankIconService? _icons;
     private CachingStatsProvider? _provider;
+    private LookupBudget? _lookupBudget;
     private PanelViewModel? _panel;
     private OverlayWindow? _window;
     private HotkeyManager? _hotkeys;
@@ -239,23 +240,43 @@ public partial class App : Application
         }), null, Timeout.Infinite, executeOnlyOnce: true);
     }
 
-    private IPlayerStatsProvider CreateInnerProvider(bool mock) =>
-        mock
-            ? new MockStatsProvider()
-            : new TrackerGgProvider(_http!, () => ApiKeyProtector.Unprotect(_settings.ProtectedApiKey), LoggerFactory.CreateLogger<TrackerGgProvider>());
+    /// <summary>The provider the settings (or the launch flags) ask for: Mock, RocketLeagueApi or TrackerGg.</summary>
+    private string EffectiveProvider =>
+        _args.Demo || _args.MockProvider ? ProviderNames.Mock : _settings.Provider;
+
+    /// <summary>Counts paid Rocket League API requests per month; one instance so the count survives provider changes.</summary>
+    internal LookupBudget LookupBudget =>
+        _lookupBudget ??= new LookupBudget(AppPaths.LookupUsageFile, () => _settings.MaxLookupsPerMonth);
+
+    private IPlayerStatsProvider CreateInnerProvider(string provider) => provider switch
+    {
+        ProviderNames.Mock => new MockStatsProvider(),
+        ProviderNames.RocketLeagueApi => new RocketLeagueApiProvider(
+            _http!,
+            () => ApiKeyProtector.Unprotect(_settings.ProtectedRocketLeagueApiKey),
+            LookupBudget,
+            LoggerFactory.CreateLogger<RocketLeagueApiProvider>()),
+        _ => new TrackerGgProvider(_http!, () => ApiKeyProtector.Unprotect(_settings.ProtectedApiKey), LoggerFactory.CreateLogger<TrackerGgProvider>()),
+    };
 
     private CachingStatsProvider CreateProvider()
     {
-        var mock = _args.Demo || _args.MockProvider || _settings.Provider == ProviderNames.Mock;
+        var provider = EffectiveProvider;
         var options = new CachingOptions
         {
             Ttl = TimeSpan.FromMinutes(_settings.CacheTtlMinutes),
             RequestsPerMinute = _settings.RequestsPerMinute,
             // Mock data is not worth caching on disk (and the demo should show the loading state every time).
-            DiskDirectory = mock ? null : AppPaths.ProfileCacheDir,
+            // Each real source keeps its own disk cache so switching never shows one source's numbers as another's.
+            DiskDirectory = provider switch
+            {
+                ProviderNames.Mock => null,
+                ProviderNames.RocketLeagueApi => Path.Combine(AppPaths.ProfileCacheDir, "rocket-league-api"),
+                _ => AppPaths.ProfileCacheDir,
+            },
         };
-        _log.LogInformation("Stats provider: {Provider}", mock ? "Mock" : "tracker.gg");
-        return new CachingStatsProvider(CreateInnerProvider(mock), options, TimeProvider.System, LoggerFactory.CreateLogger<CachingStatsProvider>());
+        _log.LogInformation("Stats provider: {Provider}", provider);
+        return new CachingStatsProvider(CreateInnerProvider(provider), options, TimeProvider.System, LoggerFactory.CreateLogger<CachingStatsProvider>());
     }
 
     private void BuildOverlay()

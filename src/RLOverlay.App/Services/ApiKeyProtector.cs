@@ -3,7 +3,7 @@ using System.Text;
 
 namespace RLOverlay.App.Services;
 
-/// <summary>Encrypts the tracker.gg API key with Windows DPAPI (current user) before it goes into settings.json.</summary>
+/// <summary>Encrypts the API keys (tracker.gg, Rocket League API) with Windows DPAPI (current user) before they go into settings.json.</summary>
 internal static class ApiKeyProtector
 {
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("RLOverlay.TrackerGgApiKey.v1");

@@ -47,6 +47,8 @@ public partial class SettingsWindow : Window
 
     private void OnApiKeyChanged(object sender, RoutedEventArgs e) => _vm.ApiKeyInput = ApiKeyBox.Password;
 
+    private void OnRlApiKeyChanged(object sender, RoutedEventArgs e) => _vm.RlApiKeyInput = RlApiKeyBox.Password;
+
     private string Target(Button button) => button == ToggleKeyField ? "toggle" : "cycle";
 
     private void OnShortcutClicked(object sender, RoutedEventArgs e)

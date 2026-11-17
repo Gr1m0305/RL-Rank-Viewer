@@ -48,6 +48,10 @@ public partial class App : ISettingsHost
 
     bool ISettingsHost.HasApiKey => !string.IsNullOrEmpty(_settings.ProtectedApiKey);
 
+    bool ISettingsHost.HasRocketLeagueApiKey => !string.IsNullOrEmpty(_settings.ProtectedRocketLeagueApiKey);
+
+    int ISettingsHost.LookupsThisMonth => LookupBudget.UsedThisMonth;
+
     bool ISettingsHost.RunAtStartup => _startup?.IsEnabled == true;
 
     string ISettingsHost.ConnectionStatus
@@ -133,16 +137,10 @@ public partial class App : ISettingsHost
         _window!.Configure(() => _tracker!.FindGameWindow(), settings.OffsetX, settings.OffsetY, settings.Scale);
     }
 
-    void ISettingsHost.Save(OverlaySettings settings, string? newApiKey, bool clearApiKey, bool runAtStartup)
+    void ISettingsHost.Save(OverlaySettings settings, ApiKeyEdit trackerGgKey, ApiKeyEdit rocketLeagueApiKey, bool runAtStartup)
     {
-        if (clearApiKey)
-        {
-            settings.ProtectedApiKey = null;
-        }
-        else if (newApiKey is not null)
-        {
-            settings.ProtectedApiKey = ApiKeyProtector.Protect(newApiKey) ?? settings.ProtectedApiKey;
-        }
+        settings.ProtectedApiKey = Apply(trackerGgKey, settings.ProtectedApiKey);
+        settings.ProtectedRocketLeagueApiKey = Apply(rocketLeagueApiKey, settings.ProtectedRocketLeagueApiKey);
 
         var old = _settings;
         _settings = settings;
@@ -153,6 +151,7 @@ public partial class App : ISettingsHost
         ApplyHotkeyBindings();
 
         if (settings.Provider != old.Provider || settings.ProtectedApiKey != old.ProtectedApiKey
+            || settings.ProtectedRocketLeagueApiKey != old.ProtectedRocketLeagueApiKey
             || settings.CacheTtlMinutes != old.CacheTtlMinutes || settings.RequestsPerMinute != old.RequestsPerMinute)
         {
             var previous = _provider;
@@ -238,12 +237,18 @@ public partial class App : ISettingsHost
 
     void ISettingsHost.OpenUrl(string url)
     {
-        // Only the fixed developer-portal link; profile links go through LinkOpener.
-        if (url == SettingsViewModel.ApiKeyPortalUrl)
+        // Only the two fixed "get a key" links; profile links go through LinkOpener.
+        if (url is SettingsViewModel.ApiKeyPortalUrl or SettingsViewModel.RocketLeagueApiUrl)
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
         }
     }
+
+    /// <summary>A new key is encrypted and replaces the saved one; Clear removes it; otherwise it is kept.</summary>
+    private static string? Apply(ApiKeyEdit edit, string? saved) =>
+        edit.Clear ? null
+        : edit.NewKey is { } key ? ApiKeyProtector.Protect(key) ?? saved
+        : saved;
 
     void ISettingsHost.ClearRankIconCache()
     {
