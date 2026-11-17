@@ -12,6 +12,12 @@ public enum MatchPhase
 
     /// <summary>After kickoff. Panel hidden unless opened manually.</summary>
     Live,
+
+    /// <summary>
+    /// Match over (MatchEnded, podium or MatchDestroyed). The roster is frozen so the last lobby can be reopened with
+    /// Ctrl+R and its profiles opened after the game; the next match or a lost connection (game closed) clears it.
+    /// </summary>
+    Ended,
 }
 
 public enum PanelChangeReason
@@ -52,5 +58,5 @@ public sealed record PanelVisibilityEffect(bool Visible, PanelChangeReason Reaso
 /// <summary>The game reported the match's playlist id (Game.PlaylistId).</summary>
 public sealed record MatchPlaylistEffect(int PlaylistId) : LobbyEffect;
 
-/// <summary>Match over (destroyed or connection lost): roster cleared, back to Idle.</summary>
+/// <summary>Roster cleared: a new match is starting, or the connection was lost (game closed). Back to Idle.</summary>
 public sealed record LobbyClearedEffect(PanelChangeReason Reason) : LobbyEffect;

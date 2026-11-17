@@ -1,8 +1,10 @@
-# RL Overlay
+# Gr1m's RL Overlay
 
 A small companion overlay for Rocket League. When you load into a match, a compact glass panel appears just below
 the scoreboard with every player's rank icon, MMR and stats for the playlist you choose (2v2 by default). Rows fill
 in live as players join, the panel fades out at kickoff, and clicking a name opens that player's tracker profile.
+After the match the lobby stays available (`Ctrl+R`) so you can look up who you just played, until you load into the
+next match or close the game. The app waits quietly in the tray and switches on by itself when Rocket League starts.
 
 ![The panel in a 2v2 lobby](docs/screenshots/01_main_2v2.png)
 
@@ -11,7 +13,7 @@ shows the official in-game rank icons.*
 
 | Key | Does |
 |---|---|
-| `Ctrl+R` | Show / hide the panel (works during the match too; the next kickoff hides it again) |
+| `Ctrl+R` | Show / hide the panel (works during the match too, where the next kickoff hides it again, and after the match) |
 | `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Tournaments, Casual. The strip shows for 1.5 s |
 | Click a name | Opens that player's tracker profile in your browser |
 
@@ -50,21 +52,35 @@ use a built-in mock provider so you can see the overlay without a key.
 * The published exe is self-contained: no .NET install needed.
 * To build from source: .NET SDK 8 or newer (the projects target .NET 8).
 
-## Get the exe
+## Install
 
-Build the single self-contained exe (about 68 MB) into `publish/`:
+Build the installer (and a portable copy) into `publish/`:
 
 ```bash
 dotnet publish src/RLOverlay.App -c Release -p:PublishProfile=SingleFile
 ```
 
-`publish/` then holds `RLOverlay.exe`, `licenses/` and `assets/ranks/README.md`. Copy the folder anywhere you like
-(for example `%LOCALAPPDATA%\Programs\RLOverlay`). The exe is not code-signed, so Windows SmartScreen may warn the
-first time; choose *More info → Run anyway* if you built it yourself.
+Run **`publish/Gr1msRLOverlay-Setup.exe`**. It installs for your Windows account only (no admin prompt) into
+`%LOCALAPPDATA%\Programs\Gr1m's RL Overlay`, adds a Start menu shortcut and an entry in *Settings → Apps*, and
+offers:
+
+* **Start with Windows** (on by default). The app then waits in the notification area and switches on by itself
+  whenever you open Rocket League.
+* A desktop shortcut.
+* Opening the app when setup finishes.
+
+![Setup](docs/screenshots/11_setup.png)
+
+Running the setup again updates the installed copy (it closes the running one first). To remove it: *Settings →
+Apps → Gr1m's RL Overlay → Uninstall*. Your settings are kept unless you tick the box to delete them.
+
+`publish/RLOverlay.exe` is the same program without installing: run it from any folder. Both files are about 68 MB
+and need no .NET install. They are not code-signed, so Windows SmartScreen may warn the first time; choose
+*More info → Run anyway* if you built them yourself.
 
 ## First-time setup
 
-1. **Start `RLOverlay.exe`.** Nothing pops up apart from a short notice: the app lives in the system tray (the blue
+1. **Install it** (above). Nothing pops up apart from a short notice: the app lives in the system tray (the blue
    and orange **R**; it may be under the ^ arrow). Double-click it for Settings.
 2. **Turn on the Stats API.** In Settings → *Game connection* (or the tray menu → *Enable Stats API…*) click
    **Enable Stats API…**. The app finds your Steam or Epic install, shows which ini files it will change, and after
@@ -85,7 +101,7 @@ first time; choose *More info → Run anyway* if you built it yourself.
    In exclusive fullscreen the overlay can't be drawn on top; the app tells you once if it sees that.
 4. **Choose the stats source.** Settings → *Player stats*: paste a tracker.gg API key if you have one with Rocket
    League access (it is stored encrypted for your Windows account), or pick *Test data* to see made-up numbers.
-5. Optional: Settings → *General* → **Start with Windows**. Press **Save**.
+5. *Start with Windows* (Settings → *General*) is on if you kept the setup default. Press **Save** after changes.
 
 Settings → *Game connection* shows a green dot and "Connected to Rocket League" once the game is running with the
 Stats API on.
@@ -99,6 +115,15 @@ Stats API on.
 * Clicking a name opens the profile in your browser. While the browser is in front the overlay hides; alt-tab back
   to the game and it returns.
 * At kickoff the panel fades out. `Ctrl+R` brings it back mid-match; the next kickoff hides it again.
+* **After the match** the lobby is kept: press `Ctrl+R` on the podium or back in the menus to see everyone you just
+  played with and click their names. It is replaced when you load into the next match and cleared when you close
+  the game.
+
+![After the match](docs/screenshots/10_after_match.png)
+
+**Standby:** while Rocket League is closed the app does nothing but wait (tray tooltip: *standby*). When the game
+starts it switches on and shows a short notice (turn that off in Settings → *General*); when the game closes it goes
+back to standby.
 
 ## Settings and tray
 
@@ -127,11 +152,13 @@ dotnet run --project tools/FakeStatsServer -- tests/fixtures/scenarios/lobby_2v2
 ```
 
 ```bash
-dotnet run --project src/RLOverlay.App -- --provider mock --port 49200 --ungated-hotkeys --dry-run-links
+dotnet run --project src/RLOverlay.App -- --provider mock --port 49200 --always-connect --ungated-hotkeys --dry-run-links
 ```
 
+(`--always-connect` skips standby, since Rocket League itself isn't running.)
+
 Players join over 5 s, the lobby waits about 30 s (try `Ctrl+G`, `Ctrl+R`), kickoff hides the panel at 33 s and the
-match is destroyed at 66 s. Type `kickoff`, `countdown`, `created`, `destroyed` or `quit` in the server window to
+match is destroyed at 66 s (the lobby stays: `Ctrl+R` shows it). Type `kickoff`, `countdown`, `created`, `destroyed` or `quit` in the server window to
 send those events right away. `lobby_3v3.json` is a 3v3 lobby. All launch flags are listed in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#launch-flags).
 
@@ -165,9 +192,9 @@ dotnet test RLOverlay.sln
 | `%LOCALAPPDATA%\RLOverlay\cache\` | looked-up players and the downloaded rank icons |
 | `%LOCALAPPDATA%\RLOverlay\ranks\` | your own rank icons, if you want to replace the downloaded ones |
 
-**Uninstall:** turn off *Start with Windows* (or delete the `RLOverlay` value under
-`HKCU\Software\Microsoft\Windows\CurrentVersion\Run`), quit from the tray, delete the exe folder and
-`%LOCALAPPDATA%\RLOverlay`. The ini backups stay next to the game's ini files; the Stats API stays on until you set
+**Uninstall:** *Settings → Apps → Gr1m's RL Overlay → Uninstall* (tick the box to delete settings too). For the
+portable copy: turn off *Start with Windows*, quit from the tray, delete the exe and `%LOCALAPPDATA%\RLOverlay`.
+Either way the ini backups stay next to the game's ini files and the Stats API stays on until you set
 `PacketSendRate=0` again.
 
 ## Docs

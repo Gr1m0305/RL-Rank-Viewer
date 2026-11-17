@@ -38,6 +38,27 @@ internal sealed record AppArgs
     /// <summary>Run only the Stats API ini edit (used when relaunched elevated) and exit.</summary>
     public bool EnableStatsApi { get; init; }
 
+    /// <summary>
+    /// Connect to the Stats API right away and keep trying, even while Rocket League is not running (testing with
+    /// FakeStatsServer). Normally the app waits in standby and connects when the game starts.
+    /// </summary>
+    public bool AlwaysConnect { get; init; }
+
+    /// <summary>Show the installer (also implied when the exe's file name contains "setup").</summary>
+    public bool Setup { get; init; }
+
+    /// <summary>Remove the installed copy (Apps &amp; features runs this).</summary>
+    public bool Uninstall { get; init; }
+
+    /// <summary>With <see cref="Setup"/> / <see cref="Uninstall"/>: no windows, default choices.</summary>
+    public bool Quiet { get; init; }
+
+    /// <summary>
+    /// Testing only: setup/uninstall put the install folder, shortcuts and registry entries under this folder and a
+    /// scratch registry key instead of the real locations.
+    /// </summary>
+    public string? SetupSandbox { get; init; }
+
     public IReadOnlyList<string> Unknown { get; init; } = [];
 
     public static AppArgs Parse(IReadOnlyList<string> args)
@@ -77,6 +98,21 @@ internal sealed record AppArgs
                     break;
                 case "--dry-run-links":
                     result = result with { DryRunLinks = true };
+                    break;
+                case "--always-connect":
+                    result = result with { AlwaysConnect = true };
+                    break;
+                case "--setup":
+                    result = result with { Setup = true };
+                    break;
+                case "--uninstall":
+                    result = result with { Uninstall = true };
+                    break;
+                case "--quiet":
+                    result = result with { Quiet = true };
+                    break;
+                case "--setup-sandbox":
+                    result = result with { SetupSandbox = Next() };
                     break;
                 case "--screenshots":
                     result = result with { ScreenshotsDir = Next() ?? "docs/screenshots" };

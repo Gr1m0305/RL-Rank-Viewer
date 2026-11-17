@@ -52,6 +52,9 @@ public sealed class OverlaySettings
     // General
     public bool RunAtStartup { get; set; }
 
+    /// <summary>Show a short notice when Rocket League starts and the overlay switches on.</summary>
+    public bool NotifyWhenGameStarts { get; set; } = true;
+
     /// <summary>Overrides the Stats API port read from the game's ini (null = use the ini, default 49123).</summary>
     public int? StatsApiPort { get; set; }
 

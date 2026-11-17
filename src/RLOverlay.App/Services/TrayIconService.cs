@@ -37,7 +37,7 @@ public sealed class TrayIconService : IDisposable
         menu.Items.Add(new Forms.ToolStripMenuItem("Quit", null, (_, _) => QuitRequested?.Invoke()));
         menu.Opening += (_, _) => MenuOpening?.Invoke();
 
-        _icon = new Forms.NotifyIcon { Icon = _image, Text = "RL Overlay", ContextMenuStrip = menu };
+        _icon = new Forms.NotifyIcon { Icon = _image, Text = AppInfo.Name, ContextMenuStrip = menu };
         _icon.MouseDoubleClick += (_, e) =>
         {
             if (e.Button == Forms.MouseButtons.Left)
@@ -69,7 +69,7 @@ public sealed class TrayIconService : IDisposable
     /// <summary>The hover text (Windows allows up to 127 characters).</summary>
     public void SetStatus(string status)
     {
-        var text = $"RL Overlay · {status}";
+        var text = $"{AppInfo.Name} · {status}";
         _icon.Text = text.Length > 127 ? text[..127] : text;
     }
 

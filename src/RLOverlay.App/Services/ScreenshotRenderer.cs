@@ -108,6 +108,15 @@ internal static class ScreenshotRenderer
         // 8 and 9. The settings window (first screen, and the whole scrolling page), with a stand-in host.
         RenderSettings(directory, written);
 
+        // 10. After the match (back in the menus): Ctrl+R shows the last lobby until the next match or the game closes.
+        {
+            var vm = Scene(icons, new OverlaySettings(), Lobby2v2, Playlist.Doubles, teamSize: 2, phase: MatchPhase.Ended);
+            Save("10_after_match.png", Compose(vm, strip: false));
+        }
+
+        // 11. The installer's first page (nothing is installed: the window is only drawn).
+        RenderSetup(directory, written);
+
         // The official icons as the app resolves them (only with --official-icons; never committed).
         if (official)
         {
@@ -320,6 +329,37 @@ internal static class ScreenshotRenderer
 
             var page = (FrameworkElement)((ScrollViewer)((Grid)client).Children[0]).Content;
             written.Add(RenderVisual(page, page.ActualWidth, page.ActualHeight, background, Path.Combine(directory, "09_settings_full.png"), page.Margin));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static void RenderSetup(string directory, List<string> written)
+    {
+        var scratch = Path.Combine(Path.GetTempPath(), "rloverlay-setup-shot-" + Guid.NewGuid().ToString("N"));
+        var vm = new Setup.SetupViewModel(new Setup.Installer(Setup.InstallLocations.Sandbox(scratch)), uninstall: false,
+            sourceExe: "", closeRunningApp: () => true, launch: _ => { })
+        {
+            InstallDir = Path.Combine(@"C:\Users\you\AppData\Local\Programs", AppInfo.Name),
+        };
+        var window = new Setup.SetupWindow(vm)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -20000,
+            Top = -20000,
+            ShowActivated = false,
+            ShowInTaskbar = false,
+        };
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            var client = (FrameworkElement)window.Content;
+            written.Add(RenderVisual(client, client.ActualWidth, client.ActualHeight, (Brush)window.FindResource("WindowBackground"),
+                Path.Combine(directory, "11_setup.png")));
         }
         finally
         {

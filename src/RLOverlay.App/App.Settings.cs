@@ -167,7 +167,7 @@ public partial class App : ISettingsHost
             _icons.PrefetchOfficialIcons();
         }
 
-        if (!_args.Demo && _args.Port is null && settings.StatsApiPort != old.StatsApiPort)
+        if (_active && _args.Port is null && settings.StatsApiPort != old.StatsApiPort)
         {
             _statsState = StatsConnectionState.Disconnected;
             StartStatsApiClient();
@@ -212,7 +212,7 @@ public partial class App : ISettingsHost
 
         var outcome = await _setup.EnableAsync();
         _gameRunningSince = null;
-        if (outcome.AnyChange && !_args.Demo && _args.Port is null && _settings.StatsApiPort is null
+        if (outcome.AnyChange && _active && _args.Port is null && _settings.StatsApiPort is null
             && _setup.ConfiguredPort() is { } port && port != _port)
         {
             StartStatsApiClient();

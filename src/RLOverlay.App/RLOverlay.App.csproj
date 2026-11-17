@@ -35,8 +35,11 @@
     <ProjectReference Include="..\RLOverlay.Core\RLOverlay.Core.csproj" />
   </ItemGroup>
 
-  <!-- The demo lobby for the demo flag (same file the tests and FakeStatsServer use). -->
+  <!-- The demo lobby for the demo flag (same file the tests and FakeStatsServer use). The two text files are also
+       embedded so the installer can write them next to the installed exe. -->
   <ItemGroup>
+    <EmbeddedResource Include="Assets\Fonts\Inter-OFL.txt" LogicalName="RLOverlay.Licenses.Inter-OFL.txt" />
+    <EmbeddedResource Include="..\..\assets\ranks\README.md" LogicalName="RLOverlay.Assets.Ranks.README.md" Link="Resources\ranks-README.md" />
     <EmbeddedResource Include="..\..\tests\fixtures\scenarios\demo_lobby.json" Link="Scenarios\demo_lobby.json" LogicalName="RLOverlay.Scenarios.demo_lobby.json" />
   </ItemGroup>
 
@@ -49,5 +52,11 @@
     <!-- Tells users which rank icon file names to drop in (no artwork ships with the app). -->
     <None Include="..\..\assets\ranks\README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" Link="assets\ranks\README.md" />
   </ItemGroup>
+
+  <!-- The installer is this same single-file exe under a setup name: a file name containing "setup" starts setup mode. -->
+  <Target Name="CopySetupExe" AfterTargets="Publish" Condition="'$(PublishSingleFile)' == 'true'">
+    <Copy SourceFiles="$(PublishDir)$(AssemblyName).exe" DestinationFiles="$(PublishDir)Gr1msRLOverlay-Setup.exe" />
+    <Message Importance="high" Text="Setup: $(PublishDir)Gr1msRLOverlay-Setup.exe" />
+  </Target>
 
 </Project>

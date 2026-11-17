@@ -15,6 +15,12 @@ public sealed class LobbyStateMachine
     private readonly Dictionary<string, Entry> _players = new(StringComparer.Ordinal);
     private long _joinSequence;
 
+    // Ended phase: the game has destroyed the match (back in the menus). From then on, lobby activity means a new match.
+    private bool _destroyed;
+
+    // The panel is open because the user pressed Ctrl+R (not auto-shown at load-in).
+    private bool _openedManually;
+
     public MatchPhase Phase { get; private set; } = MatchPhase.Idle;
 
     public bool PanelVisible { get; private set; }
@@ -50,6 +56,7 @@ public sealed class LobbyStateMachine
     public IReadOnlyList<LobbyEffect> TogglePanel()
     {
         PanelVisible = !PanelVisible;
+        _openedManually = PanelVisible;
         return [new PanelVisibilityEffect(PanelVisible, PanelChangeReason.Manual)];
     }
 
@@ -63,7 +70,17 @@ public sealed class LobbyStateMachine
 
     private void ApplyUpdate(UpdateStateMessage update, List<LobbyEffect> effects)
     {
-        if (Phase != MatchPhase.Idle && update.MatchGuid is not null && MatchGuid is not null
+        if (Phase == MatchPhase.Ended)
+        {
+            // Match over: the roster stays exactly as it was (players leaving the podium stay listed) until a new match.
+            if (update.Players.Count == 0 || !IsNewMatch(update.MatchGuid))
+            {
+                return;
+            }
+
+            StartMatch(update.MatchGuid, autoShow: update.Game.BallIsUntouched, effects);
+        }
+        else if (Phase != MatchPhase.Idle && update.MatchGuid is not null && MatchGuid is not null
             && update.MatchGuid != MatchGuid)
         {
             // A different match without a MatchDestroyed in between.
@@ -133,6 +150,17 @@ public sealed class LobbyStateMachine
         var name = string.IsNullOrWhiteSpace(presence.PlayerName) ? "Player" : presence.PlayerName;
         var key = LobbyPlayer.KeyFor(presence.PrimaryId, name);
 
+        if (Phase == MatchPhase.Ended)
+        {
+            // Leaving after the match keeps the player listed; only a join for a new match starts over.
+            if (!presence.Joined || !IsNewMatch(presence.MatchGuid))
+            {
+                return;
+            }
+
+            StartMatch(presence.MatchGuid, autoShow: true, effects);
+        }
+
         if (presence.Joined)
         {
             if (Phase == MatchPhase.Idle)
@@ -159,9 +187,8 @@ public sealed class LobbyStateMachine
         switch (evt.Kind)
         {
             case MatchEventKind.MatchCreated:
-                if (Phase == MatchPhase.Idle
-                    || (evt.MatchGuid is not null && MatchGuid is not null && evt.MatchGuid != MatchGuid)
-                    || Phase == MatchPhase.Live)
+                if (Phase is MatchPhase.Idle or MatchPhase.Live or MatchPhase.Ended
+                    || (evt.MatchGuid is not null && MatchGuid is not null && evt.MatchGuid != MatchGuid))
                 {
                     StartMatch(evt.MatchGuid, autoShow: true, effects);
                 }
@@ -169,7 +196,7 @@ public sealed class LobbyStateMachine
                 break;
 
             case MatchEventKind.MatchInitialized:
-                if (Phase == MatchPhase.Idle)
+                if (Phase == MatchPhase.Idle || (Phase == MatchPhase.Ended && IsNewMatch(evt.MatchGuid)))
                 {
                     StartMatch(evt.MatchGuid, autoShow: true, effects);
                 }
@@ -178,7 +205,16 @@ public sealed class LobbyStateMachine
 
             case MatchEventKind.RoundStarted:
                 // Kickoff. Also ends a manual Ctrl+R open.
-                if (Phase == MatchPhase.Idle)
+                if (Phase == MatchPhase.Ended)
+                {
+                    if (!IsNewMatch(evt.MatchGuid))
+                    {
+                        break;
+                    }
+
+                    StartMatch(evt.MatchGuid, autoShow: false, effects);
+                }
+                else if (Phase == MatchPhase.Idle)
                 {
                     MatchGuid = evt.MatchGuid;
                 }
@@ -192,11 +228,45 @@ public sealed class LobbyStateMachine
 
                 break;
 
+            case MatchEventKind.MatchEnded:
+            case MatchEventKind.PodiumStart:
+                if (Phase is MatchPhase.PreKickoff or MatchPhase.Live)
+                {
+                    Phase = MatchPhase.Ended;
+                    _destroyed = false;
+                }
+
+                break;
+
             case MatchEventKind.MatchDestroyed:
-                EndMatch(PanelChangeReason.MatchDestroyed, effects);
+                if (_players.Count == 0)
+                {
+                    EndMatch(PanelChangeReason.MatchDestroyed, effects);
+                    break;
+                }
+
+                // Keep the roster for after the game. A panel the game popped up (lobby left before kickoff) goes
+                // away; one the user opened with Ctrl+R stays open.
+                if (Phase != MatchPhase.Idle)
+                {
+                    Phase = MatchPhase.Ended;
+                }
+
+                _destroyed = true;
+                if (PanelVisible && !_openedManually)
+                {
+                    PanelVisible = false;
+                    effects.Add(new PanelVisibilityEffect(false, PanelChangeReason.MatchDestroyed));
+                }
+
                 break;
         }
     }
+
+    /// <summary>In the Ended phase: does this activity belong to a different match than the one that ended?</summary>
+    private bool IsNewMatch(string? matchGuid) =>
+        (matchGuid is not null && MatchGuid is not null && matchGuid != MatchGuid)
+        || (_destroyed && (matchGuid is null || MatchGuid is null));
 
     private void StartMatch(string? matchGuid, bool autoShow, List<LobbyEffect> effects)
     {
@@ -208,12 +278,14 @@ public sealed class LobbyStateMachine
 
         MatchGuid = matchGuid;
         MatchPlaylistId = null;
+        _destroyed = false;
         Phase = autoShow ? MatchPhase.PreKickoff : MatchPhase.Live;
         effects.Add(new MatchStartedEffect(matchGuid, Phase));
 
         if (autoShow && !PanelVisible)
         {
             PanelVisible = true;
+            _openedManually = false;
             effects.Add(new PanelVisibilityEffect(true, PanelChangeReason.MatchStarted));
         }
     }
@@ -235,6 +307,7 @@ public sealed class LobbyStateMachine
         Phase = MatchPhase.Idle;
         MatchGuid = null;
         MatchPlaylistId = null;
+        _destroyed = false;
     }
 
     private void AddPlayer(LobbyPlayer player, List<LobbyEffect> effects)

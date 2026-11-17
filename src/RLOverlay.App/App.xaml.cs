@@ -23,11 +23,6 @@ namespace RLOverlay.App;
 /// </summary>
 public partial class App : Application
 {
-    private const string MutexName = @"Local\RLOverlay.SingleInstance";
-
-    /// <summary>A second launch sets this event so the running copy opens its settings window.</summary>
-    private const string ShowSettingsEventName = @"Local\RLOverlay.ShowSettings";
-
     private const int DefaultPort = StatsApiIni.DefaultPort;
 
     private SerilogLoggerFactory? _loggerFactory;
@@ -35,6 +30,8 @@ public partial class App : Application
     private Mutex? _mutex;
     private EventWaitHandle? _showSettingsSignal;
     private RegisteredWaitHandle? _showSettingsWait;
+    private EventWaitHandle? _quitSignal;
+    private RegisteredWaitHandle? _quitWait;
     private AppArgs _args = new();
     private SettingsStore? _store;
     private OverlaySettings _settings = new();
@@ -51,6 +48,9 @@ public partial class App : Application
     private CancellationTokenSource? _clientCts;
     private StatsConnectionState _statsState = StatsConnectionState.Disconnected;
     private int _port = DefaultPort;
+
+    // Standby vs active: the Stats API client only runs while Rocket League is running (or with --always-connect).
+    private bool _active;
     private StatsApiSetup? _setup;
     private StartupRegistration? _startup;
     private TrayIconService? _tray;
@@ -69,7 +69,7 @@ public partial class App : Application
         base.OnStartup(e);
         _args = AppArgs.Parse(e.Args);
         SetUpLogging();
-        _log.LogInformation("RLOverlay {Version} starting (args: {Args})", typeof(App).Assembly.GetName().Version, string.Join(' ', e.Args));
+        _log.LogInformation("{App} {Version} starting (args: {Args})", AppInfo.Name, AppInfo.Version, string.Join(' ', e.Args));
         foreach (var unknown in _args.Unknown)
         {
             _log.LogWarning("Unknown argument {Arg}", unknown);
@@ -98,10 +98,17 @@ public partial class App : Application
             return;
         }
 
+        // Installer / uninstaller (the setup exe is this same exe under a "...Setup.exe" name).
+        if (_args.Setup || _args.Uninstall || IsSetupFileName())
+        {
+            RunSetup();
+            return;
+        }
+
         // Only the normal (game) mode is single-instance; demo and screenshot runs may sit next to it.
         if (!_args.Demo)
         {
-            _mutex = new Mutex(initiallyOwned: true, MutexName, out var created);
+            _mutex = new Mutex(initiallyOwned: true, InstanceSignals.MutexName, out var created);
             if (!created)
             {
                 _log.LogInformation("Another instance is already running; asking it to open its settings");
@@ -135,7 +142,7 @@ public partial class App : Application
 
         if (!_settings.FirstRunCompleted && !_args.Demo)
         {
-            _tray!.Notify("RL Overlay is running",
+            _tray!.Notify($"{AppInfo.Name} is running",
                 $"It lives here in the notification area. In a match, {_settings.ToggleHotkey} shows or hides the panel and {_settings.CycleHotkey} switches playlists. Double-click the icon for settings.");
             _settings.FirstRunCompleted = true;
             _store.Save(_settings);
@@ -208,7 +215,7 @@ public partial class App : Application
     {
         try
         {
-            using var signal = EventWaitHandle.OpenExisting(ShowSettingsEventName);
+            using var signal = EventWaitHandle.OpenExisting(InstanceSignals.ShowSettingsEventName);
             signal.Set();
         }
         catch (Exception ex) when (ex is WaitHandleCannotBeOpenedException or UnauthorizedAccessException or IOException)
@@ -219,9 +226,17 @@ public partial class App : Application
 
     private void ListenForSecondLaunch()
     {
-        _showSettingsSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSettingsEventName);
+        _showSettingsSignal = new EventWaitHandle(false, EventResetMode.AutoReset, InstanceSignals.ShowSettingsEventName);
         _showSettingsWait = ThreadPool.RegisterWaitForSingleObject(
             _showSettingsSignal, (_, _) => Dispatcher.BeginInvoke(OpenSettings), null, Timeout.Infinite, executeOnlyOnce: false);
+
+        // Setup (update) and uninstall ask the running copy to quit before replacing or removing the exe.
+        _quitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, InstanceSignals.QuitEventName);
+        _quitWait = ThreadPool.RegisterWaitForSingleObject(_quitSignal, (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            _log.LogInformation("Asked to quit by setup");
+            Shutdown();
+        }), null, Timeout.Infinite, executeOnlyOnce: true);
     }
 
     private IPlayerStatsProvider CreateInnerProvider(bool mock) =>
@@ -318,16 +333,81 @@ public partial class App : Application
             return;
         }
 
+        // Standby until Rocket League starts: no connection attempts while the game is closed. The tracker watches the
+        // process list (never the game process itself) and wakes the overlay up when the game appears.
+        _tracker!.GameRunningChanged += OnGameRunningChanged;
+        if (_args.AlwaysConnect || _tracker.IsGameRunning)
+        {
+            Activate(announce: false);
+        }
+        else
+        {
+            EnterStandby();
+        }
+    }
+
+    private void OnGameRunningChanged(bool running)
+    {
+        if (running)
+        {
+            Activate(announce: true);
+        }
+        else if (!_args.AlwaysConnect)
+        {
+            EnterStandby();
+        }
+    }
+
+    /// <summary>Rocket League is running: connect to its Stats API (the client keeps retrying until the game opens it).</summary>
+    private void Activate(bool announce)
+    {
+        if (_active)
+        {
+            return;
+        }
+
+        _active = true;
+        _log.LogInformation(_args.AlwaysConnect ? "Connecting to the Stats API (--always-connect)" : "Rocket League is running: overlay on");
         StartStatsApiClient();
+        UpdateTrayStatus();
+        if (announce && _settings.NotifyWhenGameStarts)
+        {
+            _tray?.Notify($"{AppInfo.Name} is on",
+                $"Rocket League is running. The panel appears when you load into a match; {_settings.ToggleHotkey} shows or hides it.");
+        }
+    }
+
+    /// <summary>Rocket League closed (or isn't running yet): stop the client, clear the lobby, wait for the game.</summary>
+    private void EnterStandby()
+    {
+        var wasActive = _active;
+        _active = false;
+        StopStatsApiClient();
+        _statsState = StatsConnectionState.Disconnected;
+        _gameRunningSince = null;
+        if (_coordinator?.IsPreviewing != true)
+        {
+            _coordinator?.OnConnectionChanged(StatsConnectionState.Disconnected);
+        }
+
+        _log.LogInformation(wasActive ? "Rocket League closed: standby until it starts again" : "Standby: waiting for Rocket League to start");
+        UpdateTrayStatus();
     }
 
     /// <summary>Port: command line, then settings, then the game's ini, then 49123.</summary>
     private int ResolvePort() => _args.Port ?? _settings.StatsApiPort ?? _setup!.ConfiguredPort() ?? DefaultPort;
 
-    private void StartStatsApiClient()
+    private void StopStatsApiClient()
     {
         _clientCts?.Cancel();
         _clientCts?.Dispose();
+        _clientCts = null;
+        _client = null;
+    }
+
+    private void StartStatsApiClient()
+    {
+        StopStatsApiClient();
         _clientCts = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
         var token = _clientCts.Token;
 
@@ -398,9 +478,10 @@ public partial class App : Application
 
     private string ConnectionText() =>
         _args.Demo ? "demo mode"
+        : !_active ? "standby: switches on when Rocket League starts"
         : _statsState == StatsConnectionState.Connected ? $"connected to Rocket League (port {_port})"
         : _tracker?.IsGameRunning == true ? $"waiting for the Stats API (port {_port})"
-        : "waiting for Rocket League";
+        : $"waiting for Rocket League (port {_port})";
 
     /// <summary>One-off tips: exclusive fullscreen, and a running game whose Stats API never answers.</summary>
     private void StartNotices()
@@ -487,6 +568,8 @@ public partial class App : Application
         _window?.Close();
         _showSettingsWait?.Unregister(null);
         _showSettingsSignal?.Dispose();
+        _quitWait?.Unregister(null);
+        _quitSignal?.Dispose();
         if (_mutex is not null)
         {
             _mutex.ReleaseMutex();

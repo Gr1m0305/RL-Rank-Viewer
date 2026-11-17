@@ -7,7 +7,7 @@
         xmlns:v="clr-namespace:RLOverlay.App.Views"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}"
-        Title="RL Overlay settings"
+        Title="Gr1m's RL Overlay settings"
         Width="660" Height="760" MinWidth="560" MinHeight="460"
         Icon="pack://application:,,,/RLOverlay;component/Assets/app.ico"
         Background="{DynamicResource WindowBackground}"
@@ -49,8 +49,8 @@
                         <TextBlock Text="R" FontSize="16" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
                     <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="Settings" FontSize="19" FontWeight="SemiBold" />
-                        <TextBlock Text="Changes apply when you press Save. Preview shows the panel on screen with test data."
+                        <TextBlock Text="Gr1m's RL Overlay" FontSize="19" FontWeight="SemiBold" />
+                        <TextBlock Text="Settings · changes apply when you press Save. Preview shows the panel on screen with test data."
                                    Style="{StaticResource Hint}" Margin="0,2,0,0" />
                     </StackPanel>
                 </DockPanel>
@@ -308,7 +308,14 @@
                         <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding RunAtStartup}">
                             <StackPanel>
                                 <TextBlock Text="Start with Windows" FontSize="13.5" />
-                                <TextBlock Text="Starts quietly in the notification area when you sign in." Style="{StaticResource Hint}" />
+                                <TextBlock Text="Waits quietly in the notification area and switches on by itself whenever you open Rocket League." Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}" />
+                        <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding NotifyWhenGameStarts}">
+                            <StackPanel>
+                                <TextBlock Text="Tell me when it switches on" FontSize="13.5" />
+                                <TextBlock Text="A short notice when Rocket League starts and the overlay wakes up." Style="{StaticResource Hint}" />
                             </StackPanel>
                         </CheckBox>
                         <Button Content="Open logs folder" Style="{StaticResource LinkButton}" Command="{Binding OpenLogsCommand}"

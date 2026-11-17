@@ -206,7 +206,9 @@ public sealed partial class PanelViewModel : ObservableObject
         }
         else
         {
-            FooterLeft = "Click a name to open their tracker profile";
+            FooterLeft = Phase == MatchPhase.Ended
+                ? "Match over · click a name to open their tracker profile"
+                : "Click a name to open their tracker profile";
             FooterRight = Phase == MatchPhase.PreKickoff ? "Hides at kickoff" : $"{string.Join("+", ToggleKeys)} to hide";
         }
     }

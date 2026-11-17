@@ -120,6 +120,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _cacheTtlMinutes = _original.CacheTtlMinutes;
         _requestsPerMinute = _original.RequestsPerMinute;
         _downloadRankIcons = _original.DownloadRankIcons;
+        _notifyWhenGameStarts = _original.NotifyWhenGameStarts;
         _runAtStartup = host.RunAtStartup;
         _portText = _original.StatsApiPort?.ToString(CultureInfo.InvariantCulture) ?? "";
         RefreshStatsApi();
@@ -212,6 +213,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _downloadRankIcons;
 
     [ObservableProperty]
+    private bool _notifyWhenGameStarts;
+
+    [ObservableProperty]
     private bool _runAtStartup;
 
     [ObservableProperty]
@@ -293,6 +297,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.CacheTtlMinutes = CacheTtlMinutes;
         s.RequestsPerMinute = RequestsPerMinute;
         s.DownloadRankIcons = DownloadRankIcons;
+        s.NotifyWhenGameStarts = NotifyWhenGameStarts;
         s.StatsApiPort = int.TryParse(PortText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) ? port : null;
         return s.Normalize();
     }

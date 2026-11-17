@@ -23,6 +23,7 @@ internal sealed class GameWindowTracker : IDisposable
     private HashSet<uint> _gamePids = [];
     private DateTime _pidsRefreshedAt = DateTime.MinValue;
     private bool _fullscreenReported;
+    private bool? _wasRunning;
 
     public GameWindowTracker(ILogger<GameWindowTracker> logger)
     {
@@ -34,6 +35,12 @@ internal sealed class GameWindowTracker : IDisposable
 
     /// <summary>Raised with true when Rocket League becomes the foreground window, false when it stops being it.</summary>
     public event Action<bool>? GameForegroundChanged;
+
+    /// <summary>
+    /// Raised with true when a Rocket League process appears and false when the last one is gone (checked every 2 s
+    /// from the process list; never raised for the state found at <see cref="Start"/>).
+    /// </summary>
+    public event Action<bool>? GameRunningChanged;
 
     /// <summary>Raised (once per app session) when Rocket League is foreground in exclusive fullscreen.</summary>
     public event Action? ExclusiveFullscreenDetected;
@@ -95,6 +102,24 @@ internal sealed class GameWindowTracker : IDisposable
 
     private void Refresh()
     {
+        RefreshPids(force: true);
+        var running = _gamePids.Count > 0;
+        if (running != _wasRunning)
+        {
+            var first = _wasRunning is null;
+            _wasRunning = running;
+            if (!first)
+            {
+                _logger.LogInformation("Rocket League {State}", running ? "started" : "closed");
+                if (!running)
+                {
+                    GameWindow = IntPtr.Zero;
+                }
+
+                GameRunningChanged?.Invoke(running);
+            }
+        }
+
         Evaluate(NativeMethods.GetForegroundWindow());
         if (IsGameForeground)
         {
