@@ -1,0 +1,45 @@
+<UserControl x:Class="RLOverlay.App.Views.PlaylistStripView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:RLOverlay.App.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:PlaylistStripViewModel}"
+             FontFamily="{StaticResource UiFont}"
+             Focusable="False">
+    <Grid>
+        <Border CornerRadius="18" Background="#FF0A0C10" Margin="3">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="4" Direction="270" Opacity="0.5" Color="Black" />
+            </Border.Effect>
+        </Border>
+        <Border CornerRadius="18"
+                Background="{StaticResource PanelBackground}"
+                BorderBrush="{StaticResource PanelBorder}"
+                BorderThickness="1"
+                Padding="5">
+            <ItemsControl ItemsSource="{Binding Items}" ItemsPanel="{StaticResource HorizontalPanel}" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:PlaylistStripItem}">
+                        <Border x:Name="Pill" CornerRadius="13" Padding="13,4,13,5" Background="Transparent">
+                            <TextBlock x:Name="Label" Text="{Binding Label}" FontSize="13"
+                                       Foreground="{StaticResource TextSecondary}" />
+                        </Border>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                <Setter TargetName="Label" Property="Foreground" Value="{StaticResource TextDisabled}" />
+                                <Setter TargetName="Label" Property="TextDecorations" Value="Strikethrough" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                <Setter TargetName="Pill" Property="Background" Value="{StaticResource AccentBlue}" />
+                                <Setter TargetName="Label" Property="Foreground" Value="White" />
+                                <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+    </Grid>
+</UserControl>

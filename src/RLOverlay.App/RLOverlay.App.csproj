@@ -9,6 +9,8 @@
     <RootNamespace>RLOverlay.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Required by the LibraryImport source generator in Native/. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- WFAC010 is a WinForms-only DPI hint; this is a WPF app whose DPI mode lives in app.manifest. -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
@@ -28,10 +30,17 @@
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.0" />
+    <PackageReference Include="SharpVectors.Wpf" Version="1.8.6" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\RLOverlay.Core\RLOverlay.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The demo lobby for the demo flag (same file the tests and FakeStatsServer use). -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\tests\fixtures\scenarios\demo_lobby.json" Link="Scenarios\demo_lobby.json" LogicalName="RLOverlay.Scenarios.demo_lobby.json" />
   </ItemGroup>
 
 </Project>

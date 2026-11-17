@@ -1,0 +1,34 @@
+<Window x:Class="RLOverlay.App.Overlay.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:RLOverlay.App.Overlay"
+        Title="RL Overlay"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        Focusable="False"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType">
+    <!-- The outer margin leaves room for the panel's soft shadow; it is fully transparent and click-through. -->
+    <Grid x:Name="Root" Margin="{x:Static local:OverlayWindow.ShadowMarginThickness}" Opacity="0">
+        <Grid.LayoutTransform>
+            <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
+        </Grid.LayoutTransform>
+        <Grid.RenderTransform>
+            <TranslateTransform x:Name="Slide" Y="0" />
+        </Grid.RenderTransform>
+        <StackPanel>
+            <ContentPresenter x:Name="PanelHost" />
+            <!-- Playlist strip (Ctrl+G). Space is reserved so the window does not resize when it appears. -->
+            <ContentPresenter x:Name="StripHost" HorizontalAlignment="Center" Margin="0,12,0,0"
+                              Opacity="0" Visibility="Hidden" />
+        </StackPanel>
+    </Grid>
+</Window>
