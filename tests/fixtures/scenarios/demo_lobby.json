@@ -1,0 +1,16 @@
+{
+  // Used by `RLOverlay --demo`: a 2v2 lobby that fills in and then holds (no kickoff), so the panel stays up.
+  "name": "Demo: 2v2 lobby that fills in and holds",
+  "matchGuid": "DEMO0000000000000000000000000001",
+  "playlistId": 11,
+  "arena": "Stadium_P",
+  "tickRate": 10,
+  "steps": [
+    { "at": 0, "event": "MatchCreated" },
+    { "at": 300, "join": { "name": "Zephyr", "primaryId": "Epic|7f3a9c1e2b7d4e8f9a0b1c2d3e4f5a6b|0", "team": 0 } },
+    { "at": 1100, "join": { "name": "Nova_RL", "primaryId": "PS4|4829173650192837465|0", "team": 1 } },
+    { "at": 1900, "join": { "name": "kickoffKing", "primaryId": "Steam|76561198012345678|0", "team": 0 } },
+    { "at": 2700, "join": { "name": "flipreset.exe", "primaryId": "XboxOne|2535412345678901|0", "team": 1, "connectingMs": 1200 } },
+    { "at": 5000, "ticks": false }
+  ]
+}
