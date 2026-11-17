@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <Company>RLOverlay</Company>
+    <Product>RL Overlay</Product>
+    <Version>0.1.0</Version>
+    <!-- Only the .NET 10 SDK may be installed; it still builds net8.0 targets. -->
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+.idea/
+TestResults/
+
+# Single-file publish output (large binary; build it locally, see README)
+publish/
+
+# Never commit rank artwork: users supply their own icons (see assets/ranks/README.md)
+assets/ranks/*.png
+assets/ranks/*.svg
+
+# Local scratch
+*.log
