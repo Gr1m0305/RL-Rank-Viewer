@@ -63,3 +63,16 @@ public sealed class StreakBrushConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         throw new NotSupportedException();
 }
+
+/// <summary>"Ctrl+Shift+R" → ["Ctrl", "Shift", "R"] for key caps.</summary>
+public sealed class HotkeyPartsConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
+    {
+        string text when RLOverlay.Core.Config.HotkeyGesture.TryParse(text, out var gesture) => gesture.DisplayParts,
+        string text => text.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+        _ => Array.Empty<string>(),
+    };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}

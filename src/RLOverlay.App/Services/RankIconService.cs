@@ -53,9 +53,15 @@ public sealed class RankIconService
     /// <summary>Raised on the UI thread when a better icon for a tier became available (provider download finished).</summary>
     public event Action<int>? IconUpdated;
 
+    /// <summary>
+    /// Whether downloaded icons are used and new ones fetched (setting <c>DownloadRankIcons</c>). Off: only the user's
+    /// own files, else placeholders.
+    /// </summary>
+    public bool UseDownloads { get; private set; } = true;
+
     /// <summary>Where each tier's icon currently comes from (for the README / diagnostics).</summary>
     public string DescribeSource(int tier) =>
-        FindUserFile(RankTier.FileStem(tier)) ?? FindCachedDownload(tier) ?? "built-in placeholder";
+        FindUserFile(RankTier.FileStem(tier)) ?? (UseDownloads ? FindCachedDownload(tier) : null) ?? "built-in placeholder";
 
     public ImageSource Get(int tier)
     {
@@ -66,10 +72,53 @@ public sealed class RankIconService
         }
 
         var image = TryLoad(FindUserFile(RankTier.FileStem(tier)))
-                    ?? TryLoad(FindCachedDownload(tier))
+                    ?? (UseDownloads ? TryLoad(FindCachedDownload(tier)) : null)
                     ?? Placeholder(tier);
         _resolved[tier] = image;
         return image;
+    }
+
+    /// <summary>Turns downloaded icons on or off; visible rows switch at once.</summary>
+    public void SetUseDownloads(bool use)
+    {
+        if (UseDownloads == use)
+        {
+            return;
+        }
+
+        UseDownloads = use;
+        RefreshAll();
+    }
+
+    /// <summary>Deletes the downloaded icons (rows fall back until they are fetched again).</summary>
+    public void ClearDownloads()
+    {
+        try
+        {
+            if (Directory.Exists(_cacheDir))
+            {
+                foreach (var file in Directory.GetFiles(_cacheDir, "tier_*"))
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning("Could not delete downloaded rank icons: {Error}", ex.Message);
+        }
+
+        _logger.LogInformation("Downloaded rank icons cleared");
+        RefreshAll();
+    }
+
+    private void RefreshAll()
+    {
+        _resolved.Clear();
+        foreach (var tier in RankTier.All)
+        {
+            IconUpdated?.Invoke(tier);
+        }
     }
 
     /// <summary>
@@ -100,7 +149,7 @@ public sealed class RankIconService
     private async Task DownloadIfMissingAsync(int tier, string? url)
     {
         tier = RankTier.Clamp(tier);
-        if (_http is null || string.IsNullOrWhiteSpace(url)
+        if (_http is null || !UseDownloads || string.IsNullOrWhiteSpace(url)
             || !Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps
             || FindUserFile(RankTier.FileStem(tier)) is not null || FindCachedDownload(tier) is not null
             || !_downloading.TryAdd(tier, true))

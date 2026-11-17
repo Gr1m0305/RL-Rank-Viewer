@@ -105,10 +105,13 @@ internal static class ScreenshotRenderer
         Save("07_rank_placeholders.png", IconSheet(RankIconService.Placeholder,
             "Built-in rank placeholders (shown until the official icons have downloaded, or when downloads are off)"));
 
-        // 8. The official icons as the app resolves them (only with --official-icons; never committed).
+        // 8 and 9. The settings window (first screen, and the whole scrolling page), with a stand-in host.
+        RenderSettings(directory, written);
+
+        // The official icons as the app resolves them (only with --official-icons; never committed).
         if (official)
         {
-            Save("08_rank_icons_official.png", IconSheet(icons.Get, "Official rank icons, downloaded at runtime to the local cache"));
+            Save("rank_icons_official.png", IconSheet(icons.Get, "Official rank icons, downloaded at runtime to the local cache"));
         }
 
         return written;
@@ -294,6 +297,68 @@ internal static class ScreenshotRenderer
             // Let deferred bindings (RelativeSource, ItemsControl generation) settle.
             Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
         }
+    }
+
+    private static void RenderSettings(string directory, List<string> written)
+    {
+        var window = new SettingsWindow(new SettingsViewModel(new SampleSettingsHost()))
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -20000,
+            Top = -20000,
+            ShowActivated = false,
+            ShowInTaskbar = false,
+        };
+        window.Show();
+        try
+        {
+            window.UpdateLayout();
+            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            var background = (Brush)window.FindResource("WindowBackground");
+            var client = (FrameworkElement)window.Content;
+            written.Add(RenderVisual(client, client.ActualWidth, client.ActualHeight, background, Path.Combine(directory, "08_settings.png")));
+
+            var page = (FrameworkElement)((ScrollViewer)((Grid)client).Children[0]).Content;
+            written.Add(RenderVisual(page, page.ActualWidth, page.ActualHeight, background, Path.Combine(directory, "09_settings_full.png"), page.Margin));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>
+    /// Renders an element in place (no re-layout) onto a solid background. The brush's viewbox is in the parent's
+    /// coordinates (it includes the element's layout offset), so <paramref name="margin"/> is the element's margin.
+    /// </summary>
+    private static string RenderVisual(Visual visual, double width, double height, Brush background, string path, Thickness margin = default)
+    {
+        var totalWidth = width + margin.Left + margin.Right;
+        var totalHeight = height + margin.Top + margin.Bottom;
+        var area = new Rect(0, 0, totalWidth, totalHeight);
+        var drawing = new DrawingVisual();
+        using (var dc = drawing.RenderOpen())
+        {
+            dc.DrawRectangle(background, null, area);
+            var brush = new VisualBrush(visual)
+            {
+                Stretch = Stretch.None,
+                AlignmentX = AlignmentX.Left,
+                AlignmentY = AlignmentY.Top,
+                ViewboxUnits = BrushMappingMode.Absolute,
+                Viewbox = area,
+            };
+            dc.DrawRectangle(brush, null, area);
+        }
+
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(totalWidth * RenderScale), (int)Math.Ceiling(totalHeight * RenderScale),
+            96 * RenderScale, 96 * RenderScale, PixelFormats.Pbgra32);
+        bitmap.Render(drawing);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+        return path;
     }
 
     private static string RenderToPng(FrameworkElement root, string path)

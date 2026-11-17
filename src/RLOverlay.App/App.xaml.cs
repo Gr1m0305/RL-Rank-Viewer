@@ -18,15 +18,23 @@ namespace RLOverlay.App;
 
 /// <summary>
 /// Application entry and composition root (no DI container): logging, settings, stats provider, Stats API client or
-/// demo feed, lobby coordinator, overlay window, hotkeys and the game-window tracker.
+/// demo feed, lobby coordinator, overlay window, hotkeys, game-window tracker, tray icon and settings window
+/// (the <see cref="ISettingsHost"/> side lives in App.Settings.cs).
 /// </summary>
 public partial class App : Application
 {
     private const string MutexName = @"Local\RLOverlay.SingleInstance";
 
+    /// <summary>A second launch sets this event so the running copy opens its settings window.</summary>
+    private const string ShowSettingsEventName = @"Local\RLOverlay.ShowSettings";
+
+    private const int DefaultPort = StatsApiIni.DefaultPort;
+
     private SerilogLoggerFactory? _loggerFactory;
     private Microsoft.Extensions.Logging.ILogger _log = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
     private Mutex? _mutex;
+    private EventWaitHandle? _showSettingsSignal;
+    private RegisteredWaitHandle? _showSettingsWait;
     private AppArgs _args = new();
     private SettingsStore? _store;
     private OverlaySettings _settings = new();
@@ -40,6 +48,16 @@ public partial class App : Application
     private OverlayCoordinator? _coordinator;
     private ScenarioFeed? _feed;
     private StatsApiClient? _client;
+    private CancellationTokenSource? _clientCts;
+    private StatsConnectionState _statsState = StatsConnectionState.Disconnected;
+    private int _port = DefaultPort;
+    private StatsApiSetup? _setup;
+    private StartupRegistration? _startup;
+    private TrayIconService? _tray;
+    private DispatcherTimer? _noticeTimer;
+    private DateTime? _gameRunningSince;
+    private bool _toldFullscreen;
+    private bool _toldStatsApi;
     private readonly CancellationTokenSource _shutdown = new();
 
     internal ILoggerFactory LoggerFactory => _loggerFactory!;
@@ -65,6 +83,15 @@ public partial class App : Application
             ev.SetObserved();
         };
 
+        _setup = new StatsApiSetup(LoggerFactory.CreateLogger<StatsApiSetup>());
+
+        // Relaunched elevated just to edit the game's ini (see StatsApiSetup.EnableAsync).
+        if (_args.EnableStatsApi)
+        {
+            Shutdown(_setup.RunElevatedEdit());
+            return;
+        }
+
         if (_args.ScreenshotsDir is { } shotsDir)
         {
             _ = RenderScreenshotsAsync(Path.GetFullPath(shotsDir));
@@ -72,24 +99,29 @@ public partial class App : Application
         }
 
         // Only the normal (game) mode is single-instance; demo and screenshot runs may sit next to it.
-        if (!_args.Demo && _args.ScreenshotsDir is null)
+        if (!_args.Demo)
         {
             _mutex = new Mutex(initiallyOwned: true, MutexName, out var created);
             if (!created)
             {
-                _log.LogInformation("Another instance is already running; exiting");
+                _log.LogInformation("Another instance is already running; asking it to open its settings");
+                SignalRunningInstance();
                 _mutex.Dispose();
                 _mutex = null;
                 Shutdown();
                 return;
             }
+
+            ListenForSecondLaunch();
         }
 
         _store = new SettingsStore(AppPaths.SettingsFile, LoggerFactory.CreateLogger<SettingsStore>());
         _settings = _store.Load();
+        _startup = new StartupRegistration(LoggerFactory.CreateLogger<StartupRegistration>());
 
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         _icons = new RankIconService([AppPaths.RankOverrideDir, AppPaths.RankAssetsDir], AppPaths.RankCacheDir, _http, LoggerFactory.CreateLogger<RankIconService>());
+        _icons.SetUseDownloads(_settings.DownloadRankIcons);
 
         BuildOverlay();
         if (_settings.DownloadRankIcons)
@@ -98,6 +130,21 @@ public partial class App : Application
         }
 
         StartDataSource();
+        CreateTray();
+        StartNotices();
+
+        if (!_settings.FirstRunCompleted && !_args.Demo)
+        {
+            _tray!.Notify("RL Overlay is running",
+                $"It lives here in the notification area. In a match, {_settings.ToggleHotkey} shows or hides the panel and {_settings.CycleHotkey} switches playlists. Double-click the icon for settings.");
+            _settings.FirstRunCompleted = true;
+            _store.Save(_settings);
+        }
+
+        if (_args.OpenSettings)
+        {
+            OpenSettings();
+        }
 
         if (_args.ExitAfterSeconds is { } seconds)
         {
@@ -157,6 +204,26 @@ public partial class App : Application
         _log = _loggerFactory.CreateLogger("RLOverlay");
     }
 
+    private void SignalRunningInstance()
+    {
+        try
+        {
+            using var signal = EventWaitHandle.OpenExisting(ShowSettingsEventName);
+            signal.Set();
+        }
+        catch (Exception ex) when (ex is WaitHandleCannotBeOpenedException or UnauthorizedAccessException or IOException)
+        {
+            _log.LogInformation("Could not reach the running instance: {Error}", ex.Message);
+        }
+    }
+
+    private void ListenForSecondLaunch()
+    {
+        _showSettingsSignal = new EventWaitHandle(false, EventResetMode.AutoReset, ShowSettingsEventName);
+        _showSettingsWait = ThreadPool.RegisterWaitForSingleObject(
+            _showSettingsSignal, (_, _) => Dispatcher.BeginInvoke(OpenSettings), null, Timeout.Infinite, executeOnlyOnce: false);
+    }
+
     private IPlayerStatsProvider CreateInnerProvider(bool mock) =>
         mock
             ? new MockStatsProvider()
@@ -209,8 +276,7 @@ public partial class App : Application
         };
 
         _tracker.GameForegroundChanged += _ => UpdateForegroundGate();
-        _tracker.ExclusiveFullscreenDetected += () =>
-            _log.LogWarning("Rocket League is in exclusive fullscreen; the overlay cannot draw over it. Switch to Borderless or Windowed.");
+        _tracker.ExclusiveFullscreenDetected += OnExclusiveFullscreen;
         _tracker.Start();
         UpdateForegroundGate();
     }
@@ -224,8 +290,9 @@ public partial class App : Application
 
     /// <summary>
     /// Hotkeys only while Rocket League is in front (so Ctrl+R still reloads your browser), and the overlay hides while
-    /// another window is in front of a running game. Neither applies when the game is not running at all (testing) or
-    /// with <c>--ungated-hotkeys</c> / <c>--demo</c>.
+    /// another window is in front of a running game. Neither applies when the game is not running at all (testing),
+    /// with <c>--ungated-hotkeys</c> / <c>--demo</c>, or during the settings Preview (shown over the settings window).
+    /// Hotkeys pause while a new shortcut is being recorded.
     /// </summary>
     private void UpdateForegroundGate()
     {
@@ -235,8 +302,9 @@ public partial class App : Application
         }
 
         var foreground = _tracker.IsGameForeground;
-        _hotkeys.SetActive(foreground || HotkeysUngated);
-        _window.SetSuppressed(!HotkeysUngated && !foreground && _tracker.IsGameRunning);
+        var previewing = _coordinator?.IsPreviewing == true;
+        _hotkeys.SetActive(!_hotkeysSuspended && (foreground || HotkeysUngated));
+        _window.SetSuppressed(!previewing && !HotkeysUngated && !foreground && _tracker.IsGameRunning);
     }
 
     private void StartDataSource()
@@ -250,20 +318,57 @@ public partial class App : Application
             return;
         }
 
-        var port = _args.Port ?? _settings.StatsApiPort ?? 49123;
-        _client = new StatsApiClient(new StatsApiClientOptions { Port = port }, LoggerFactory.CreateLogger<StatsApiClient>());
+        StartStatsApiClient();
+    }
+
+    /// <summary>Port: command line, then settings, then the game's ini, then 49123.</summary>
+    private int ResolvePort() => _args.Port ?? _settings.StatsApiPort ?? _setup!.ConfiguredPort() ?? DefaultPort;
+
+    private void StartStatsApiClient()
+    {
+        _clientCts?.Cancel();
+        _clientCts?.Dispose();
+        _clientCts = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+        var token = _clientCts.Token;
+
+        _port = ResolvePort();
+        var client = new StatsApiClient(new StatsApiClientOptions { Port = _port }, LoggerFactory.CreateLogger<StatsApiClient>());
+        _client = client;
         var dispatcher = Dispatcher;
-        _client.MessageReceived += message => dispatcher.BeginInvoke(() => _coordinator!.Handle(message));
-        _client.ConnectionStateChanged += state => dispatcher.BeginInvoke(() =>
+        var port = _port;
+        client.MessageReceived += message => dispatcher.BeginInvoke(() =>
         {
-            _log.LogInformation("Stats API {State} (port {Port})", state, port);
-            _coordinator!.OnConnectionChanged(state);
+            // The settings Preview owns the panel while it runs; the real lobby resumes with the next update.
+            if (!token.IsCancellationRequested && _coordinator?.IsPreviewing != true)
+            {
+                _coordinator!.Handle(message);
+            }
+        });
+        client.ConnectionStateChanged += state => dispatcher.BeginInvoke(() =>
+        {
+            if (token.IsCancellationRequested)
+            {
+                return;
+            }
+
+            // Retries while the game is closed flip Connecting/Disconnected every few seconds: log only real changes.
+            if (state == StatsConnectionState.Connected || _statsState == StatsConnectionState.Connected)
+            {
+                _log.LogInformation("Stats API {State} (port {Port})", state, port);
+            }
+
+            _statsState = state;
+            UpdateTrayStatus();
+            if (_coordinator?.IsPreviewing != true)
+            {
+                _coordinator!.OnConnectionChanged(state);
+            }
         });
         _ = Task.Run(async () =>
         {
             try
             {
-                await _client.RunAsync(_shutdown.Token).ConfigureAwait(false);
+                await client.RunAsync(token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -273,6 +378,88 @@ public partial class App : Application
                 _log.LogError(ex, "Stats API client stopped");
             }
         });
+    }
+
+    private void CreateTray()
+    {
+        _tray = new TrayIconService();
+        _tray.TogglePanelRequested += () => _coordinator?.TogglePanel();
+        _tray.SettingsRequested += OpenSettings;
+        _tray.EnableStatsApiRequested += OpenSettings; // the Game connection section is at the top
+        _tray.OpenLogsRequested += () => OpenFolder(AppPaths.LogsDir);
+        _tray.QuitRequested += () => Shutdown();
+        _tray.MenuOpening += () => _tray.SetToggleLabel(_window?.PanelOn == true, _settings.ToggleHotkey);
+        _tray.SetToggleLabel(false, _settings.ToggleHotkey);
+        UpdateTrayStatus();
+        _tray.Show();
+    }
+
+    private void UpdateTrayStatus() => _tray?.SetStatus(ConnectionText());
+
+    private string ConnectionText() =>
+        _args.Demo ? "demo mode"
+        : _statsState == StatsConnectionState.Connected ? $"connected to Rocket League (port {_port})"
+        : _tracker?.IsGameRunning == true ? $"waiting for the Stats API (port {_port})"
+        : "waiting for Rocket League";
+
+    /// <summary>One-off tips: exclusive fullscreen, and a running game whose Stats API never answers.</summary>
+    private void StartNotices()
+    {
+        if (_args.Demo)
+        {
+            return;
+        }
+
+        _noticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+        _noticeTimer.Tick += (_, _) => CheckStatsApiNotice();
+        _noticeTimer.Start();
+    }
+
+    private void CheckStatsApiNotice()
+    {
+        if (_toldStatsApi || _tracker is null)
+        {
+            return;
+        }
+
+        if (!_tracker.IsGameRunning || _statsState == StatsConnectionState.Connected)
+        {
+            _gameRunningSince = null;
+            UpdateTrayStatus();
+            return;
+        }
+
+        _gameRunningSince ??= DateTime.UtcNow;
+        UpdateTrayStatus();
+        if (DateTime.UtcNow - _gameRunningSince < TimeSpan.FromSeconds(30))
+        {
+            return;
+        }
+
+        _toldStatsApi = true;
+        var installs = _setup!.FindInstalls();
+        var enabled = _setup.Status(installs).FirstOrDefault(f => f.Values?.HasSection == true)?.Values?.IsEnabled == true;
+        if (enabled)
+        {
+            _tray?.Notify("Can't reach the Stats API",
+                $"Rocket League is running, but nothing answers on port {_port}. If you enabled the Stats API while the game was open, restart the game.", warning: true);
+        }
+        else
+        {
+            _tray?.Notify("Rocket League's Stats API is off",
+                "The overlay needs it to see who is in your match. Right-click this icon → Enable Stats API, then restart the game.", warning: true);
+        }
+    }
+
+    private void OnExclusiveFullscreen()
+    {
+        _log.LogWarning("Rocket League is in exclusive fullscreen; the overlay cannot draw over it. Switch to Borderless or Windowed.");
+        if (!_toldFullscreen)
+        {
+            _toldFullscreen = true;
+            _tray?.Notify("Switch Rocket League to Borderless",
+                "The overlay can't draw over exclusive fullscreen. In the game: Settings → Video → Display Mode → Borderless (or Windowed).", warning: true);
+        }
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
@@ -286,13 +473,20 @@ public partial class App : Application
     {
         _log.LogInformation("Exiting");
         _shutdown.Cancel();
+        _noticeTimer?.Stop();
+        _settingsWindow?.Close();
+        StopPreviewFeed();
         _feed?.Dispose();
         _hotkeys?.Dispose();
         _tracker?.Dispose();
         _coordinator?.Dispose();
         _provider?.Dispose();
+        (_previewProvider as IDisposable)?.Dispose();
         _http?.Dispose();
+        _tray?.Dispose();
         _window?.Close();
+        _showSettingsWait?.Unregister(null);
+        _showSettingsSignal?.Dispose();
         if (_mutex is not null)
         {
             _mutex.ReleaseMutex();

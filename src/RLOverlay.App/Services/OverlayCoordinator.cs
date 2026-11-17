@@ -27,6 +27,7 @@ internal sealed class OverlayCoordinator : IDisposable
     private CancellationTokenSource _matchCts = new();
     private OverlaySettings _settings;
     private bool _userCycled;
+    private IPlayerStatsProvider? _providerBeforePreview;
 
     public OverlayCoordinator(
         OverlaySettings settings,
@@ -97,6 +98,41 @@ internal sealed class OverlayCoordinator : IDisposable
         if (!settings.EnabledPlaylists.Contains(_vm.Playlist))
         {
             _vm.Playlist = ResolveInitialPlaylist();
+        }
+    }
+
+    /// <summary>True while the settings window's Preview runs (real Stats API messages are ignored meanwhile).</summary>
+    public bool IsPreviewing => _providerBeforePreview is not null;
+
+    /// <summary>Settings Preview: forget the real lobby and look players up with <paramref name="previewProvider"/>.</summary>
+    public void BeginPreview(IPlayerStatsProvider previewProvider)
+    {
+        _providerBeforePreview ??= Provider;
+        Provider = previewProvider;
+        Reset();
+    }
+
+    /// <summary>Ends the Preview: the panel is cleared and the real provider is used again.</summary>
+    public void EndPreview()
+    {
+        Reset();
+        if (_providerBeforePreview is { } real)
+        {
+            Provider = real;
+            _providerBeforePreview = null;
+        }
+    }
+
+    /// <summary>Swaps the real provider after a settings change (kept aside while a Preview runs).</summary>
+    public void ReplaceProvider(IPlayerStatsProvider provider)
+    {
+        if (_providerBeforePreview is not null)
+        {
+            _providerBeforePreview = provider;
+        }
+        else
+        {
+            Provider = provider;
         }
     }
 

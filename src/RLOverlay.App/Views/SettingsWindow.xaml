@@ -1,0 +1,362 @@
+<Window x:Class="RLOverlay.App.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:RLOverlay.App.ViewModels"
+        xmlns:v="clr-namespace:RLOverlay.App.Views"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:SettingsViewModel}"
+        Title="RL Overlay settings"
+        Width="660" Height="760" MinWidth="560" MinHeight="460"
+        Icon="pack://application:,,,/RLOverlay;component/Assets/app.ico"
+        Background="{DynamicResource WindowBackground}"
+        Foreground="{StaticResource TextPrimary}"
+        FontFamily="{StaticResource UiFont}"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Ideal"
+        ShowInTaskbar="True">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="SettingsStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <v:HotkeyPartsConverter x:Key="HotkeyParts" />
+
+            <!-- Key caps for a shortcut field; "Press a shortcut…" while recording. -->
+            <DataTemplate x:Key="ShortcutContent">
+                <ItemsControl ItemsSource="{Binding Converter={StaticResource HotkeyParts}}"
+                              ItemTemplate="{StaticResource KeyCapTemplate}"
+                              ItemsPanel="{StaticResource HorizontalPanel}" Focusable="False" />
+            </DataTemplate>
+            <DataTemplate x:Key="RecordingContent">
+                <TextBlock Text="Press a shortcut…" FontSize="13" Foreground="{StaticResource TextSecondary}" Margin="2,2,0,2" />
+            </DataTemplate>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <StackPanel Margin="24,18,22,24">
+                <!-- Header -->
+                <DockPanel Margin="0,0,0,2">
+                    <Border Width="30" Height="30" CornerRadius="8" Background="{StaticResource AppBadgeBrush}" VerticalAlignment="Center">
+                        <TextBlock Text="R" FontSize="16" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="Settings" FontSize="19" FontWeight="SemiBold" />
+                        <TextBlock Text="Changes apply when you press Save. Preview shows the panel on screen with test data."
+                                   Style="{StaticResource Hint}" Margin="0,2,0,0" />
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- Game connection -->
+                <TextBlock Text="GAME CONNECTION" Style="{StaticResource SectionHeader}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <DockPanel>
+                            <Ellipse Width="9" Height="9" VerticalAlignment="Center" Margin="0,1,10,0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="{StaticResource WaitingYellow}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding StatsApiOn}" Value="True">
+                                                <Setter Property="Fill" Value="{StaticResource WinGreen}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding StatsApiSummary}" Style="{StaticResource Label}" TextWrapping="Wrap" />
+                        </DockPanel>
+                        <TextBlock Text="{Binding ConnectionStatus}" Style="{StaticResource Hint}" Margin="19,4,0,0" />
+                        <ItemsControl ItemsSource="{Binding StatsApiFiles}" Margin="19,8,0,0" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:StatsApiFileRow}">
+                                    <StackPanel Margin="0,0,0,6">
+                                        <TextBlock Text="{Binding Path}" FontSize="11.5" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Path}" />
+                                        <TextBlock Text="{Binding State}" FontSize="12" Foreground="{StaticResource TextSecondary}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,6,0,0"
+                                   Text="The overlay reads the game's official Stats API, which is off until it is enabled in the game's ini file. Enabling backs up each file first; the game must be restarted afterwards. Rocket League has to run in Borderless or Windowed mode for the overlay to draw on top." />
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Content="Enable Stats API…" Style="{StaticResource SecondaryButton}" Command="{Binding EnableStatsApiCommand}" />
+                            <Button Content="Check again" Style="{StaticResource LinkButton}" Command="{Binding RefreshStatsApiCommand}"
+                                    VerticalAlignment="Center" Margin="16,0,0,0" />
+                        </StackPanel>
+                        <TextBlock Text="{Binding EnableMessage}" Style="{StaticResource Hint}" Foreground="{StaticResource TextPrimary}" Margin="0,10,0,0"
+                                   Visibility="{Binding EnableMessage, Converter={StaticResource NotEmptyToVisibility}}" />
+                        <Border Style="{StaticResource Divider}" />
+                        <DockPanel>
+                            <TextBox DockPanel.Dock="Right" Width="100" Style="{StaticResource Field}" Text="{Binding PortText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="Leave empty to use the port from the game's ini (49123 by default)." />
+                            <StackPanel>
+                                <TextBlock Text="Stats API port" Style="{StaticResource Label}" />
+                                <TextBlock Text="Empty = read it from the game's ini file." Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Player stats -->
+                <TextBlock Text="PLAYER STATS" Style="{StaticResource SectionHeader}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <RadioButton Content="tracker.gg API (your own key)" GroupName="Provider" Style="{StaticResource Radio}"
+                                     IsChecked="{Binding UseTrackerGg}" />
+                        <StackPanel Margin="28,10,0,0" IsEnabled="{Binding UseTrackerGg}">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Remove key" Style="{StaticResource LinkButton}" Command="{Binding RemoveKeyCommand}"
+                                        VerticalAlignment="Center" Margin="14,0,0,0"
+                                        Visibility="{Binding HasStoredKey, Converter={StaticResource BoolToVisibility}}" />
+                                <PasswordBox x:Name="ApiKeyBox" Style="{StaticResource SecretField}" AutomationProperties.Name="tracker.gg API key" PasswordChanged="OnApiKeyChanged" />
+                            </DockPanel>
+                            <TextBlock Text="{Binding KeyStatus}" Style="{StaticResource Hint}" Margin="0,6,0,0" />
+                            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0">
+                                <Run Text="Tracker Network's public API may not offer Rocket League; without access, rows show “No data”." />
+                            </TextBlock>
+                            <Button Content="Get a key at tracker.gg/developers" Style="{StaticResource LinkButton}" Command="{Binding GetApiKeyCommand}"
+                                    HorizontalAlignment="Left" Margin="0,6,0,0" />
+                        </StackPanel>
+                        <RadioButton Content="Test data (no account needed)" GroupName="Provider" Style="{StaticResource Radio}"
+                                     IsChecked="{Binding UseMockData}" Margin="0,14,0,0" />
+                        <Border Style="{StaticResource Divider}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Keep looked-up players for (minutes)" Style="{StaticResource Label}" />
+                                <TextBlock Text="Re-joining the same players doesn't ask again within this time." Style="{StaticResource Hint}" />
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Width="100" Style="{StaticResource Field}" VerticalAlignment="Center"
+                                     Text="{Binding CacheTtlMinutes, UpdateSourceTrigger=PropertyChanged}" />
+                            <StackPanel Grid.Row="2">
+                                <TextBlock Text="Lookups per minute (at most)" Style="{StaticResource Label}" />
+                                <TextBlock Text="Stays under the API's rate limit." Style="{StaticResource Hint}" />
+                            </StackPanel>
+                            <TextBox Grid.Row="2" Grid.Column="1" Width="100" Style="{StaticResource Field}" VerticalAlignment="Center"
+                                     Text="{Binding RequestsPerMinute, UpdateSourceTrigger=PropertyChanged}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Playlists -->
+                <TextBlock Text="PLAYLISTS" Style="{StaticResource SectionHeader}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="In the Ctrl+G cycle" Style="{StaticResource Label}" Margin="0,0,0,10" />
+                        <ItemsControl ItemsSource="{Binding Playlists}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:PlaylistOption}">
+                                    <CheckBox Content="{Binding Label}" IsChecked="{Binding IsEnabled}" Style="{StaticResource Chip}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Border Style="{StaticResource Divider}" Margin="0,4,0,12" />
+                        <DockPanel>
+                            <ComboBox DockPanel.Dock="Right" Style="{StaticResource Combo}" ItemsSource="{Binding DefaultChoices}"
+                                      SelectedItem="{Binding DefaultPlaylist}" VerticalAlignment="Center">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:PlaylistOption}">
+                                        <TextBlock Text="{Binding Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <StackPanel>
+                                <TextBlock Text="Default playlist" Style="{StaticResource Label}" />
+                                <TextBlock Text="Shown when a match starts." Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </DockPanel>
+                        <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding FollowMatchPlaylist}" Margin="0,14,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Follow the match's playlist" FontSize="13.5" />
+                                <TextBlock Text="In ranked 1v1, 2v2, 3v3 and the extra modes, start on that playlist instead of the default."
+                                           Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </CheckBox>
+                    </StackPanel>
+                </Border>
+
+                <!-- Columns -->
+                <TextBlock Text="COLUMNS" Style="{StaticResource SectionHeader}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Stats shown after MMR (the panel gets narrower when you turn some off)." Style="{StaticResource Hint}" Margin="0,0,0,10" />
+                        <ItemsControl ItemsSource="{Binding Columns}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ColumnOption}">
+                                    <CheckBox Content="{Binding Label}" IsChecked="{Binding IsOn}" Style="{StaticResource Chip}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- Hotkeys -->
+                <TextBlock Text="SHORTCUTS" Style="{StaticResource SectionHeader}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <DockPanel>
+                            <Button x:Name="ToggleKeyField" DockPanel.Dock="Right" Style="{StaticResource KeyField}" AutomationProperties.Name="Show or hide the panel shortcut"
+                                    Click="OnShortcutClicked" PreviewKeyDown="OnShortcutKeyDown" LostKeyboardFocus="OnShortcutLostFocus"
+                                    Content="{Binding ToggleHotkey}" ContentTemplate="{StaticResource ShortcutContent}" />
+                            <TextBlock Text="Show / hide the panel" Style="{StaticResource Label}" />
+                        </DockPanel>
+                        <DockPanel Margin="0,10,0,0">
+                            <Button x:Name="CycleKeyField" DockPanel.Dock="Right" Style="{StaticResource KeyField}" AutomationProperties.Name="Next playlist shortcut"
+                                    Click="OnShortcutClicked" PreviewKeyDown="OnShortcutKeyDown" LostKeyboardFocus="OnShortcutLostFocus"
+                                    Content="{Binding CycleHotkey}" ContentTemplate="{StaticResource ShortcutContent}" />
+                            <TextBlock Text="Next playlist" Style="{StaticResource Label}" />
+                        </DockPanel>
+                        <TextBlock x:Name="ShortcutHint" Style="{StaticResource Hint}" Margin="0,10,0,0"
+                                   Text="Click a shortcut, then press the new keys (Ctrl, Alt, Shift or Win plus a key). They only work while Rocket League is in front." />
+                    </StackPanel>
+                </Border>
+
+                <!-- Position and size -->
+                <TextBlock Text="POSITION AND SIZE" Style="{StaticResource SectionHeader}" />
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="64" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="12" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="12" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Left / right" Style="{StaticResource Label}" />
+                        <Slider Grid.Column="1" Style="{StaticResource SliderStyle}" Minimum="-800" Maximum="800" SmallChange="10" LargeChange="50"
+                                Value="{Binding OffsetX}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="{Binding OffsetX, StringFormat={}{0:0} px}" Style="{StaticResource Label}" HorizontalAlignment="Right"
+                                   Typography.NumeralAlignment="Tabular" />
+                        <TextBlock Grid.Row="2" Text="Up / down" Style="{StaticResource Label}" />
+                        <Slider Grid.Row="2" Grid.Column="1" Style="{StaticResource SliderStyle}" Minimum="-100" Maximum="700" SmallChange="10" LargeChange="50"
+                                Value="{Binding OffsetY}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding OffsetY, StringFormat={}{0:0} px}" Style="{StaticResource Label}" HorizontalAlignment="Right"
+                                   Typography.NumeralAlignment="Tabular" />
+                        <TextBlock Grid.Row="4" Text="Size" Style="{StaticResource Label}" />
+                        <Slider Grid.Row="4" Grid.Column="1" Style="{StaticResource SliderStyle}" Minimum="{Binding MinScalePercent}" Maximum="{Binding MaxScalePercent}"
+                                SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True"
+                                Value="{Binding ScalePercent}" VerticalAlignment="Center" />
+                        <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding ScaleText}" Style="{StaticResource Label}" HorizontalAlignment="Right"
+                                   Typography.NumeralAlignment="Tabular" />
+                        <DockPanel Grid.Row="5" Grid.ColumnSpan="3" Margin="0,12,0,0">
+                            <Button DockPanel.Dock="Right" Content="Reset" Style="{StaticResource LinkButton}" Command="{Binding ResetPositionCommand}" />
+                            <TextBlock Text="Measured from the top centre of the game's screen. Turn on Preview to see it move."
+                                       Style="{StaticResource Hint}" />
+                        </DockPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Rank icons -->
+                <TextBlock Text="RANK ICONS" Style="{StaticResource SectionHeader}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding DownloadRankIcons}">
+                            <StackPanel>
+                                <TextBlock Text="Download the official rank icons" FontSize="13.5" />
+                                <TextBlock Text="Fetched once from Tracker Network's image server and kept on this PC. Off: simple built-in icons."
+                                           Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </CheckBox>
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <Button Content="Open my icons folder" Style="{StaticResource SecondaryButton}" Command="{Binding OpenIconsFolderCommand}" />
+                            <Button Content="Download again" Style="{StaticResource LinkButton}" Command="{Binding RedownloadIconsCommand}"
+                                    VerticalAlignment="Center" Margin="16,0,0,0" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
+                                   Text="Icons you put in that folder (bronze_1.png … supersonic_legend.png) replace the downloaded ones." />
+                    </StackPanel>
+                </Border>
+
+                <!-- General -->
+                <TextBlock Text="GENERAL" Style="{StaticResource SectionHeader}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding RunAtStartup}">
+                            <StackPanel>
+                                <TextBlock Text="Start with Windows" FontSize="13.5" />
+                                <TextBlock Text="Starts quietly in the notification area when you sign in." Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </CheckBox>
+                        <Button Content="Open logs folder" Style="{StaticResource LinkButton}" Command="{Binding OpenLogsCommand}"
+                                HorizontalAlignment="Left" Margin="0,12,0,0" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer -->
+        <Border Grid.Row="1" Background="#0AFFFFFF" BorderBrush="{StaticResource CardBorder}" BorderThickness="0,1,0,0" Padding="24,12">
+            <DockPanel>
+                <Button x:Name="PreviewButton" DockPanel.Dock="Left" Style="{StaticResource SecondaryButton}" Command="{Binding TogglePreviewCommand}"
+                        AutomationProperties.Name="Preview" AutomationProperties.HelpText="Shows the panel on screen with test data">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,1,8,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Setter Property="Fill" Value="{StaticResource TextMuted}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPreviewing}" Value="True">
+                                            <Setter Property="Fill" Value="{StaticResource WinGreen}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock>
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="Preview" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsPreviewing}" Value="True">
+                                            <Setter Property="Text" Value="Stop preview" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Button>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="Cancel" Style="{StaticResource SecondaryButton}" Command="{Binding CancelCommand}" IsCancel="True" />
+                    <Button Content="Save" Style="{StaticResource PrimaryButton}" Command="{Binding SaveCommand}" Margin="10,0,0,0" IsDefault="True" />
+                </StackPanel>
+                <TextBlock Text="{Binding Error}" Foreground="{StaticResource LossRed}" FontSize="12.5" TextWrapping="Wrap"
+                           VerticalAlignment="Center" Margin="16,0" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

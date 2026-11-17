@@ -92,6 +92,12 @@ internal static partial class NativeMethods
 
     public static void SetExtendedStyle(IntPtr hwnd, int style) => SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(style));
 
+    /// <summary>DWMWA_USE_IMMERSIVE_DARK_MODE: dark title bar for our own settings window (Windows 10 2004+).</summary>
+    public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
     [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     private static partial IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
 

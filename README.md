@@ -52,6 +52,18 @@ dotnet run --project src/RLOverlay.App -- --demo
 
 Full setup instructions (enabling the Stats API, Borderless mode, API key) are completed in Part 7.
 
+## Settings and tray
+
+The app lives in the system tray. Right-click the icon for *Show/Hide panel*, **Settings…**, *Enable Stats API…*,
+*Open logs folder* and *Quit*; double-click opens the settings. Starting the exe again while it runs also opens the
+settings in the running copy.
+
+The settings window covers the game connection (Stats API status per ini file, a one-click *Enable Stats API…* that
+backs up each file first, the port), the stats source and API key, which playlists `Ctrl+G` cycles through and the
+default, which columns to show, the two shortcuts (click a field and press the new combination), position and size,
+rank icon downloads, and *Run at startup*. **Preview** shows the panel with a sample lobby while you adjust it; nothing
+is kept until you press **Save**.
+
 ## Docs
 
 * [docs/STATS_API_NOTES.md](docs/STATS_API_NOTES.md) — what the Stats API sends and how the app reads it
