@@ -18,6 +18,9 @@ internal static class AppPaths
     /// <summary>How many Rocket League API requests were made this month (see <c>LookupBudget</c>).</summary>
     public static string LookupUsageFile => Path.Combine(Root, "rocket-league-api-usage.json");
 
+    /// <summary>Browser profile for the tracker.gg lobby window (cookies and cache of the embedded pages).</summary>
+    public static string WebViewDataDir => Path.Combine(Root, "webview");
+
     /// <summary>User override folder for rank icons (wins over the exe folder).</summary>
     public static string RankOverrideDir => Path.Combine(Root, "ranks");
 

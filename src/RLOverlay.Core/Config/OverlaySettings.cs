@@ -26,6 +26,9 @@ public sealed class OverlaySettings
 
     public string CycleHotkey { get; set; } = "Ctrl+G";
 
+    /// <summary>Opens or closes the lobby window that shows each player's row from tracker.gg.</summary>
+    public string TrackerHotkey { get; set; } = "Ctrl+T";
+
     // Position (DIPs, relative to the top-centre anchor) and scale
     public double OffsetX { get; set; }
 
@@ -98,6 +101,11 @@ public sealed class OverlaySettings
         if (!HotkeyGesture.TryParse(CycleHotkey, out _))
         {
             CycleHotkey = "Ctrl+G";
+        }
+
+        if (!HotkeyGesture.TryParse(TrackerHotkey, out _))
+        {
+            TrackerHotkey = "Ctrl+T";
         }
 
         if (Provider is not (ProviderNames.RocketLeagueApi or ProviderNames.TrackerGg or ProviderNames.Mock))

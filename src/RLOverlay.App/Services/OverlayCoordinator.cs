@@ -56,6 +56,9 @@ internal sealed class OverlayCoordinator : IDisposable
 
     public PanelViewModel Panel => _vm;
 
+    /// <summary>Raised after the roster may have changed (players joined, left or changed team; lobby cleared).</summary>
+    public event Action? LobbyChanged;
+
     public void Handle(StatsMessage message) => ApplyEffects(_lobby.Apply(message));
 
     public void OnConnectionChanged(StatsConnectionState state)
@@ -147,6 +150,7 @@ internal sealed class OverlayCoordinator : IDisposable
         _vm.Clear();
         _vm.Playlist = ResolveInitialPlaylist();
         ShowPanel(false);
+        LobbyChanged?.Invoke();
     }
 
     /// <summary>Shows or hides the panel; the view model is frozen while hidden so nothing changes during the fade.</summary>
@@ -235,6 +239,7 @@ internal sealed class OverlayCoordinator : IDisposable
 
         _vm.Phase = _lobby.Phase;
         _vm.Refresh();
+        LobbyChanged?.Invoke();
     }
 
     private async void StartLookup(LobbyPlayer player)

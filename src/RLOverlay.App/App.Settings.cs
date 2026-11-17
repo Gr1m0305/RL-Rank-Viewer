@@ -121,6 +121,7 @@ public partial class App : ISettingsHost
         _coordinator.EndPreview();
         ApplyLook(_settings);
         UpdateForegroundGate();
+        SyncTrackerWindow();
         _log.LogInformation("Preview stopped");
     }
 
@@ -178,6 +179,7 @@ public partial class App : ISettingsHost
         }
 
         _tray?.SetToggleLabel(_window?.PanelOn == true, settings.ToggleHotkey);
+        SyncTrackerWindow();
         UpdateTrayStatus();
     }
 

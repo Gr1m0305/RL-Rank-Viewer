@@ -44,6 +44,7 @@ public partial class App : Application
     private HotkeyManager? _hotkeys;
     private GameWindowTracker? _tracker;
     private OverlayCoordinator? _coordinator;
+    private LinkOpener? _links;
     private ScenarioFeed? _feed;
     private StatsApiClient? _client;
     private CancellationTokenSource? _clientCts;
@@ -293,21 +294,26 @@ public partial class App : Application
         _window.EnsureHandle();
         _window.Configure(() => _tracker.FindGameWindow(), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
 
-        var links = new LinkOpener(_args.DryRunLinks, LoggerFactory.CreateLogger<LinkOpener>());
-        _coordinator = new OverlayCoordinator(_settings, _provider, _panel, _window, links, LoggerFactory.CreateLogger<OverlayCoordinator>());
+        _links = new LinkOpener(_args.DryRunLinks, LoggerFactory.CreateLogger<LinkOpener>());
+        _coordinator = new OverlayCoordinator(_settings, _provider, _panel, _window, _links, LoggerFactory.CreateLogger<OverlayCoordinator>());
         panelView.ProfileRequested += _coordinator.OpenProfile;
+        WireTrackerWindow();
 
         _hotkeys = new HotkeyManager(_window.Source!, LoggerFactory.CreateLogger<HotkeyManager>());
         ApplyHotkeyBindings();
         _hotkeys.Pressed += hotkey =>
         {
-            if (hotkey == OverlayHotkey.TogglePanel)
+            switch (hotkey)
             {
-                _coordinator.TogglePanel();
-            }
-            else
-            {
-                _coordinator.CyclePlaylist();
+                case OverlayHotkey.TogglePanel:
+                    _coordinator.TogglePanel();
+                    break;
+                case OverlayHotkey.CyclePlaylist:
+                    _coordinator.CyclePlaylist();
+                    break;
+                case OverlayHotkey.TrackerLobby:
+                    ToggleTrackerWindow();
+                    break;
             }
         };
 
@@ -321,14 +327,16 @@ public partial class App : Application
     {
         HotkeyGesture.TryParse(_settings.ToggleHotkey, out var toggle);
         HotkeyGesture.TryParse(_settings.CycleHotkey, out var cycle);
-        _hotkeys!.SetBindings(toggle, cycle);
+        HotkeyGesture.TryParse(_settings.TrackerHotkey, out var tracker);
+        _hotkeys!.SetBindings(toggle, cycle, tracker);
     }
 
     /// <summary>
     /// Hotkeys only while Rocket League is in front (so Ctrl+R still reloads your browser), and the overlay hides while
     /// another window is in front of a running game. Neither applies when the game is not running at all (testing),
     /// with <c>--ungated-hotkeys</c> / <c>--demo</c>, or during the settings Preview (shown over the settings window).
-    /// Hotkeys pause while a new shortcut is being recorded.
+    /// Hotkeys pause while a new shortcut is being recorded. The tracker.gg lobby window counts as the game here, so
+    /// its shortcuts (and Ctrl+G) keep working after clicking it.
     /// </summary>
     private void UpdateForegroundGate()
     {
@@ -337,7 +345,7 @@ public partial class App : Application
             return;
         }
 
-        var foreground = _tracker.IsGameForeground;
+        var foreground = _tracker.IsGameForeground || TrackerWindowInFront;
         var previewing = _coordinator?.IsPreviewing == true;
         _hotkeys.SetActive(!_hotkeysSuspended && (foreground || HotkeysUngated));
         _window.SetSuppressed(!previewing && !HotkeysUngated && !foreground && _tracker.IsGameRunning);
@@ -485,12 +493,18 @@ public partial class App : Application
     {
         _tray = new TrayIconService();
         _tray.TogglePanelRequested += () => _coordinator?.TogglePanel();
+        _tray.TrackerLobbyRequested += ToggleTrackerWindow;
         _tray.SettingsRequested += OpenSettings;
         _tray.EnableStatsApiRequested += OpenSettings; // the Game connection section is at the top
         _tray.OpenLogsRequested += () => OpenFolder(AppPaths.LogsDir);
         _tray.QuitRequested += () => Shutdown();
-        _tray.MenuOpening += () => _tray.SetToggleLabel(_window?.PanelOn == true, _settings.ToggleHotkey);
+        _tray.MenuOpening += () =>
+        {
+            _tray.SetToggleLabel(_window?.PanelOn == true, _settings.ToggleHotkey);
+            _tray.SetTrackerLabel(_trackerWindow?.IsVisible == true, _settings.TrackerHotkey);
+        };
         _tray.SetToggleLabel(false, _settings.ToggleHotkey);
+        _tray.SetTrackerLabel(false, _settings.TrackerHotkey);
         UpdateTrayStatus();
         _tray.Show();
     }
@@ -577,6 +591,7 @@ public partial class App : Application
         _shutdown.Cancel();
         _noticeTimer?.Stop();
         _settingsWindow?.Close();
+        _trackerWindow?.CloseForGood();
         StopPreviewFeed();
         _feed?.Dispose();
         _hotkeys?.Dispose();

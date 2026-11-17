@@ -92,7 +92,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     private static readonly string[] LiveProperties =
     [
-        nameof(OffsetX), nameof(OffsetY), nameof(ScalePercent), nameof(ToggleHotkey), nameof(CycleHotkey), nameof(DefaultPlaylist),
+        nameof(OffsetX), nameof(OffsetY), nameof(ScalePercent), nameof(ToggleHotkey), nameof(CycleHotkey), nameof(TrackerHotkey), nameof(DefaultPlaylist),
     ];
 
     private readonly ISettingsHost _host;
@@ -128,6 +128,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _followMatchPlaylist = _original.FollowMatchPlaylist;
         _toggleHotkey = Display(_original.ToggleHotkey, "Ctrl+R");
         _cycleHotkey = Display(_original.CycleHotkey, "Ctrl+G");
+        _trackerHotkey = Display(_original.TrackerHotkey, "Ctrl+T");
         _offsetX = _original.OffsetX;
         _offsetY = _original.OffsetY;
         _scalePercent = Math.Round(_original.Scale * 100);
@@ -180,7 +181,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string _cycleHotkey;
 
-    /// <summary>"toggle" / "cycle" while that shortcut is being recorded, else null.</summary>
+    [ObservableProperty]
+    private string _trackerHotkey;
+
+    /// <summary>"toggle" / "cycle" / "tracker" while that shortcut is being recorded, else null.</summary>
     [ObservableProperty]
     private string? _recording;
 
@@ -315,13 +319,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Called by the window when a shortcut was pressed while recording.</summary>
     public void SetHotkey(string target, HotkeyGesture gesture)
     {
-        if (target == "toggle")
+        switch (target)
         {
-            ToggleHotkey = gesture.ToString();
-        }
-        else
-        {
-            CycleHotkey = gesture.ToString();
+            case "toggle":
+                ToggleHotkey = gesture.ToString();
+                break;
+            case "tracker":
+                TrackerHotkey = gesture.ToString();
+                break;
+            default:
+                CycleHotkey = gesture.ToString();
+                break;
         }
 
         Error = null;
@@ -359,6 +367,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         };
         s.ToggleHotkey = ToggleHotkey;
         s.CycleHotkey = CycleHotkey;
+        s.TrackerHotkey = TrackerHotkey;
         s.OffsetX = Math.Round(OffsetX);
         s.OffsetY = Math.Round(OffsetY);
         s.Scale = Math.Round(ScalePercent) / 100;
@@ -375,14 +384,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Null when the edits can be saved, else what to fix.</summary>
     public string? Validate()
     {
-        if (!HotkeyGesture.TryParse(ToggleHotkey, out var toggle) || !HotkeyGesture.TryParse(CycleHotkey, out var cycle))
+        if (!HotkeyGesture.TryParse(ToggleHotkey, out var toggle) || !HotkeyGesture.TryParse(CycleHotkey, out var cycle)
+            || !HotkeyGesture.TryParse(TrackerHotkey, out var tracker))
         {
             return "Each shortcut needs Ctrl, Alt, Shift or Win plus a key.";
         }
 
-        if (toggle == cycle)
+        if (toggle == cycle || toggle == tracker || cycle == tracker)
         {
-            return "The two shortcuts must be different.";
+            return "Each shortcut must be different.";
         }
 
         var port = PortText.Trim();
