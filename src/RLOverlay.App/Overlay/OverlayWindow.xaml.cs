@@ -17,7 +17,8 @@ public partial class OverlayWindow : Window
     public const double ShadowMargin = 24;
     public static readonly Thickness ShadowMarginThickness = new(ShadowMargin);
 
-    private static readonly TimeSpan FadeIn = TimeSpan.FromMilliseconds(220);
+    private static readonly TimeSpan FadeIn = TimeSpan.FromMilliseconds(240);
+    private static readonly TimeSpan PopIn = TimeSpan.FromMilliseconds(420);
     private static readonly TimeSpan FadeOut = TimeSpan.FromMilliseconds(250);
 
     private readonly ClickThroughController _clickThrough;
@@ -92,13 +93,21 @@ public partial class OverlayWindow : Window
 
     public void SetStripVisible(bool on)
     {
+        var wasOn = StripOn;
         StripOn = on;
         if (on)
         {
             StripHost.Visibility = Visibility.Visible;
+            if (!wasOn && RichMotion)
+            {
+                (StripHost.Content as IRevealable)?.PlayReveal();
+            }
         }
 
-        var fade = new DoubleAnimation(on ? 1 : 0, new Duration(on ? TimeSpan.FromMilliseconds(140) : FadeOut));
+        var fade = new DoubleAnimation(on ? 1 : 0, new Duration(on ? TimeSpan.FromMilliseconds(160) : FadeOut))
+        {
+            EasingFunction = new CubicEase { EasingMode = on ? EasingMode.EaseOut : EasingMode.EaseIn },
+        };
         if (!on)
         {
             fade.Completed += (_, _) =>
@@ -114,6 +123,9 @@ public partial class OverlayWindow : Window
         UpdateVisibility();
     }
 
+    /// <summary>False when the user turned off Windows animations: then the overlay only fades.</summary>
+    private static bool RichMotion => SystemParameters.ClientAreaAnimation;
+
     public void SetSuppressed(bool suppressed)
     {
         Suppressed = suppressed;
@@ -127,7 +139,14 @@ public partial class OverlayWindow : Window
         {
             // Strip-only (Ctrl+G while the panel is hidden): collapse the panel. While the window fades out the panel
             // keeps its layout, so the fade is not cut short.
+            var panelAppears = PanelOn && PanelHost.Visibility != Visibility.Visible;
             PanelHost.Visibility = PanelOn ? Visibility.Visible : Visibility.Collapsed;
+            if (panelAppears && _wantVisible && RichMotion)
+            {
+                // Strip was showing alone and now the panel joins it: stagger the panel in.
+                (PanelHost.Content as IRevealable)?.PlayReveal();
+            }
+
             ShowAnimated();
         }
         else
@@ -143,6 +162,8 @@ public partial class OverlayWindow : Window
             return;
         }
 
+        // A fresh appearance (not a re-show that interrupts a fade-out) gets the full entrance.
+        var fresh = !IsVisible || Root.Opacity < 0.05;
         _wantVisible = true;
         if (!IsVisible)
         {
@@ -151,7 +172,7 @@ public partial class OverlayWindow : Window
 
         Reposition();
         EnsureTopmost();
-        Animate(to: 1, slideFrom: -10, FadeIn, completed: null);
+        AnimateIn(fresh);
         _clickThrough.Start();
     }
 
@@ -164,7 +185,7 @@ public partial class OverlayWindow : Window
 
         _wantVisible = false;
         _clickThrough.Stop();
-        Animate(to: 0, slideFrom: null, FadeOut, completed: () =>
+        AnimateOut(() =>
         {
             if (!_wantVisible)
             {
@@ -224,20 +245,61 @@ public partial class OverlayWindow : Window
         return IntPtr.Zero;
     }
 
-    private void Animate(double to, double? slideFrom, TimeSpan duration, Action? completed)
+    /// <summary>
+    /// Entrance: fade in while the panel drops 16 px into place and springs from 96 % to full size (slight overshoot),
+    /// then the panel's sections cascade in (<see cref="IRevealable"/>).
+    /// </summary>
+    private void AnimateIn(bool fresh)
     {
-        var ease = new CubicEase { EasingMode = to > 0 ? EasingMode.EaseOut : EasingMode.EaseIn };
-        var fade = new DoubleAnimation(to, new Duration(duration)) { EasingFunction = ease };
-        if (completed is not null)
+        var easeOut = new CubicEase { EasingMode = EasingMode.EaseOut };
+        Root.BeginAnimation(OpacityProperty, new DoubleAnimation(1, new Duration(FadeIn)) { EasingFunction = easeOut }, HandoffBehavior.SnapshotAndReplace);
+
+        if (!RichMotion)
         {
-            fade.Completed += (_, _) => completed();
+            Pop.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+            Pop.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            Slide.BeginAnimation(TranslateTransform.YProperty, null);
+            return;
         }
 
+        var duration = new Duration(PopIn);
+        var spring = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.35 };
+        var slide = fresh ? new DoubleAnimation(-16, 0, duration) : new DoubleAnimation(0, duration);
+        slide.EasingFunction = easeOut;
+        var pop = fresh ? new DoubleAnimation(0.96, 1, duration) : new DoubleAnimation(1, duration);
+        pop.EasingFunction = spring;
+        Slide.BeginAnimation(TranslateTransform.YProperty, slide, HandoffBehavior.SnapshotAndReplace);
+        Pop.BeginAnimation(ScaleTransform.ScaleXProperty, pop, HandoffBehavior.SnapshotAndReplace);
+        Pop.BeginAnimation(ScaleTransform.ScaleYProperty, pop, HandoffBehavior.SnapshotAndReplace);
+
+        if (fresh && PanelHost.Visibility == Visibility.Visible)
+        {
+            (PanelHost.Content as IRevealable)?.PlayReveal();
+        }
+    }
+
+    /// <summary>Exit (kickoff, Ctrl+R): fade out over 250 ms while lifting 10 px and shrinking to 97 %.</summary>
+    private void AnimateOut(Action completed)
+    {
+        var easeIn = new CubicEase { EasingMode = EasingMode.EaseIn };
+        var duration = new Duration(FadeOut);
+        var fade = new DoubleAnimation(0, duration) { EasingFunction = easeIn };
+        fade.Completed += (_, _) => completed();
         Root.BeginAnimation(OpacityProperty, fade, HandoffBehavior.SnapshotAndReplace);
 
-        var slide = slideFrom is { } from
-            ? new DoubleAnimation(from, 0, new Duration(duration)) { EasingFunction = ease }
-            : new DoubleAnimation(-6, new Duration(duration)) { EasingFunction = ease };
-        Slide.BeginAnimation(TranslateTransform.YProperty, slide, HandoffBehavior.SnapshotAndReplace);
+        if (RichMotion)
+        {
+            var lift = new DoubleAnimation(-10, duration) { EasingFunction = easeIn };
+            var shrink = new DoubleAnimation(0.97, duration) { EasingFunction = easeIn };
+            Slide.BeginAnimation(TranslateTransform.YProperty, lift, HandoffBehavior.SnapshotAndReplace);
+            Pop.BeginAnimation(ScaleTransform.ScaleXProperty, shrink, HandoffBehavior.SnapshotAndReplace);
+            Pop.BeginAnimation(ScaleTransform.ScaleYProperty, shrink, HandoffBehavior.SnapshotAndReplace);
+        }
     }
+}
+
+/// <summary>Overlay content that can play its own entrance (staggered sections, pop-in).</summary>
+public interface IRevealable
+{
+    void PlayReveal();
 }

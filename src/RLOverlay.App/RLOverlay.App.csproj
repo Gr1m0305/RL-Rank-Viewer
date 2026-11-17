@@ -43,4 +43,12 @@
     <EmbeddedResource Include="..\..\tests\fixtures\scenarios\demo_lobby.json" Link="Scenarios\demo_lobby.json" LogicalName="RLOverlay.Scenarios.demo_lobby.json" />
   </ItemGroup>
 
+  <!-- Bundled font (OFL): compiled in as WPF resources; the licence ships next to the exe. -->
+  <ItemGroup>
+    <Resource Include="Assets\Fonts\Inter-*.ttf" />
+    <None Include="Assets\Fonts\Inter-OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Link="licenses\Inter-OFL.txt" />
+    <!-- Tells users which rank icon file names to drop in (no artwork ships with the app). -->
+    <None Include="..\..\assets\ranks\README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Link="assets\ranks\README.md" />
+  </ItemGroup>
+
 </Project>

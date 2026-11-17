@@ -3,8 +3,8 @@
                     xmlns:v="clr-namespace:RLOverlay.App.Views"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
-    <!-- Typography. UiFont is swapped for the bundled Inter in Part 5. -->
-    <FontFamily x:Key="UiFont">Segoe UI</FontFamily>
+    <!-- Typography: Inter 4.1 (SIL OFL 1.1, Assets/Fonts/Inter-OFL.txt), compiled into the exe. -->
+    <FontFamily x:Key="UiFont">pack://application:,,,/RLOverlay;component/Assets/Fonts/#Inter</FontFamily>
 
     <!-- Palette -->
     <Color x:Key="AccentBlueColor">#2F8CFF</Color>
@@ -71,7 +71,11 @@
                                    TextAlignment="Right"
                                    VerticalAlignment="Center"
                                    Typography.NumeralAlignment="Tabular"
-                                   Typography.NumeralStyle="Lining" />
+                                   Typography.NumeralStyle="Lining">
+                            <TextBlock.RenderTransform>
+                                <TranslateTransform Y="0" />
+                            </TextBlock.RenderTransform>
+                        </TextBlock>
                         <v:SkeletonBar x:Name="Bar"
                                        Width="{TemplateBinding BarWidth}"
                                        Height="9"
@@ -83,6 +87,22 @@
                         <Trigger Property="IsLoading" Value="True">
                             <Setter TargetName="Value" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
+                            <!-- Loaded: the number fades up out of the skeleton bar. -->
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Value" Storyboard.TargetProperty="Opacity"
+                                                         From="0" To="1" Duration="0:0:0.3" />
+                                        <DoubleAnimation Storyboard.TargetName="Value"
+                                                         Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                         From="5" To="0" Duration="0:0:0.34">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

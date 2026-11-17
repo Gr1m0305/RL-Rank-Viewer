@@ -17,12 +17,17 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType">
     <!-- The outer margin leaves room for the panel's soft shadow; it is fully transparent and click-through. -->
-    <Grid x:Name="Root" Margin="{x:Static local:OverlayWindow.ShadowMarginThickness}" Opacity="0">
+    <Grid x:Name="Root" Margin="{x:Static local:OverlayWindow.ShadowMarginThickness}" Opacity="0"
+          RenderTransformOrigin="0.5,0">
         <Grid.LayoutTransform>
             <ScaleTransform x:Name="Scale" ScaleX="1" ScaleY="1" />
         </Grid.LayoutTransform>
+        <!-- Entrance/exit motion: a small spring scale around the top centre plus a vertical slide. -->
         <Grid.RenderTransform>
-            <TranslateTransform x:Name="Slide" Y="0" />
+            <TransformGroup>
+                <ScaleTransform x:Name="Pop" ScaleX="1" ScaleY="1" />
+                <TranslateTransform x:Name="Slide" Y="0" />
+            </TransformGroup>
         </Grid.RenderTransform>
         <StackPanel>
             <ContentPresenter x:Name="PanelHost" />

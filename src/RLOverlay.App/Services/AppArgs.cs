@@ -23,6 +23,12 @@ internal sealed record AppArgs
     /// <summary>Render the panel states to PNGs in this folder and exit.</summary>
     public string? ScreenshotsDir { get; init; }
 
+    /// <summary>
+    /// With <see cref="ScreenshotsDir"/>: draw the official rank icons (downloaded to the cache) instead of the
+    /// placeholders. Off by default so the committed docs screenshots contain no rank artwork.
+    /// </summary>
+    public bool OfficialIcons { get; init; }
+
     /// <summary>Quit after this many seconds (automation).</summary>
     public double? ExitAfterSeconds { get; init; }
 
@@ -74,6 +80,9 @@ internal sealed record AppArgs
                     break;
                 case "--screenshots":
                     result = result with { ScreenshotsDir = Next() ?? "docs/screenshots" };
+                    break;
+                case "--official-icons":
+                    result = result with { OfficialIcons = true };
                     break;
                 case "--exit-after":
                     if (double.TryParse(Next(), NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)

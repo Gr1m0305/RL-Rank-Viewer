@@ -110,7 +110,24 @@ internal sealed class OverlayCoordinator : IDisposable
         _vm.Phase = MatchPhase.Idle;
         _vm.Clear();
         _vm.Playlist = ResolveInitialPlaylist();
-        _window.SetPanelVisible(false);
+        ShowPanel(false);
+    }
+
+    /// <summary>Shows or hides the panel; the view model is frozen while hidden so nothing changes during the fade.</summary>
+    private void ShowPanel(bool visible)
+    {
+        if (visible)
+        {
+            _vm.IsFrozen = false;
+            _vm.Phase = _lobby.Phase;
+            _vm.Refresh();
+        }
+        else
+        {
+            _vm.IsFrozen = true;
+        }
+
+        _window.SetPanelVisible(visible);
     }
 
     private void ApplyEffects(IReadOnlyList<LobbyEffect> effects)
@@ -161,9 +178,7 @@ internal sealed class OverlayCoordinator : IDisposable
 
                 case PanelVisibilityEffect visibility:
                     _logger.LogInformation("Panel {State} ({Reason})", visibility.Visible ? "shown" : "hidden", visibility.Reason);
-                    _vm.Phase = _lobby.Phase;
-                    _vm.Refresh();
-                    _window.SetPanelVisible(visibility.Visible);
+                    ShowPanel(visibility.Visible);
                     if (!visibility.Visible && visibility.Reason == PanelChangeReason.Kickoff)
                     {
                         HideStrip();
@@ -175,9 +190,9 @@ internal sealed class OverlayCoordinator : IDisposable
                     _logger.LogInformation("Lobby cleared ({Reason})", cleared.Reason);
                     CancelLookups();
                     HideStrip();
+                    ShowPanel(false);
                     _vm.Phase = MatchPhase.Idle;
                     _vm.Clear();
-                    _window.SetPanelVisible(false);
                     break;
             }
         }

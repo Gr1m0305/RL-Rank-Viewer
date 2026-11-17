@@ -22,7 +22,11 @@
             <ItemsControl ItemsSource="{Binding Items}" ItemsPanel="{StaticResource HorizontalPanel}" Focusable="False">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:PlaylistStripItem}">
-                        <Border x:Name="Pill" CornerRadius="13" Padding="13,4,13,5" Background="Transparent">
+                        <Border x:Name="Pill" CornerRadius="13" Padding="13,4,13,5" Background="Transparent"
+                                RenderTransformOrigin="0.5,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                            </Border.RenderTransform>
                             <TextBlock x:Name="Label" Text="{Binding Label}" FontSize="13"
                                        Foreground="{StaticResource TextSecondary}" />
                         </Border>
@@ -35,6 +39,27 @@
                                 <Setter TargetName="Pill" Property="Background" Value="{StaticResource AccentBlue}" />
                                 <Setter TargetName="Label" Property="Foreground" Value="White" />
                                 <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
+                                <!-- The newly selected playlist bounces. -->
+                                <DataTrigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Pill"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                             From="0.82" To="1" Duration="0:0:0.38">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <BackEase EasingMode="EaseOut" Amplitude="0.6" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                            <DoubleAnimation Storyboard.TargetName="Pill"
+                                                             Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                             From="0.82" To="1" Duration="0:0:0.38">
+                                                <DoubleAnimation.EasingFunction>
+                                                    <BackEase EasingMode="EaseOut" Amplitude="0.6" />
+                                                </DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </DataTrigger.EnterActions>
                             </DataTrigger>
                         </DataTemplate.Triggers>
                     </DataTemplate>

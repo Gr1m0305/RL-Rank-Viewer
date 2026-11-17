@@ -158,9 +158,20 @@ public sealed partial class PanelViewModel : ObservableObject
 
     partial void OnShowSwitchedNoteChanged(bool value) => Refresh();
 
+    /// <summary>
+    /// While true, <see cref="Refresh"/> leaves the panel as it is. Set while the panel fades out, so the text and
+    /// rows don't change mid-fade (e.g. the footer flipping to "Ctrl+R to hide" at kickoff); cleared before it shows.
+    /// </summary>
+    public bool IsFrozen { get; set; }
+
     /// <summary>Recomputes team rows, seats, counts, header and footer text.</summary>
     public void Refresh()
     {
+        if (IsFrozen)
+        {
+            return;
+        }
+
         var info = PlaylistCatalog.Get(Playlist);
         Title = info.Title;
         var season = _players.Select(p => p.Profile?.Season).Max();

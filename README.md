@@ -59,6 +59,8 @@ Full setup instructions (enabling the Stats API, Borderless mode, API key) are c
 
 ## Licence notes
 
-Rank artwork belongs to Psyonix and is **not** included. Put your own icons in `assets/ranks/`
-(see [assets/ranks/README.md](assets/ranks/README.md)); otherwise the app uses icons served by the stats provider at
-runtime, or simple built-in placeholders. The bundled Inter font is licensed under the SIL Open Font License 1.1.
+Rank artwork belongs to Psyonix and is **not** included in the repository or the exe. On first start the app
+downloads the official in-game rank icons once (from Tracker Network's CDN, the images tracker.gg shows) into
+`%LOCALAPPDATA%\RLOverlay\cache\ranks\`. Until then, or if downloads are turned off, it draws simple built-in
+placeholders, which is also what the screenshots in `docs/screenshots` show. Your own icons in `assets/ranks/` win over
+the download (see [assets/ranks/README.md](assets/ranks/README.md)). The bundled Inter font is licensed under the SIL Open Font License 1.1.

@@ -43,6 +43,12 @@ public sealed class OverlaySettings
 
     public int RequestsPerMinute { get; set; } = 30;
 
+    /// <summary>
+    /// Download the official in-game rank icons once (from Tracker Network's CDN) into the local cache.
+    /// Off = only the user's own files in the ranks folder, else built-in placeholders.
+    /// </summary>
+    public bool DownloadRankIcons { get; set; } = true;
+
     // General
     public bool RunAtStartup { get; set; }
 

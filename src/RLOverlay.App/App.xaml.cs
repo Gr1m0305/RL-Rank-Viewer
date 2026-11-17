@@ -65,6 +65,12 @@ public partial class App : Application
             ev.SetObserved();
         };
 
+        if (_args.ScreenshotsDir is { } shotsDir)
+        {
+            _ = RenderScreenshotsAsync(Path.GetFullPath(shotsDir));
+            return;
+        }
+
         // Only the normal (game) mode is single-instance; demo and screenshot runs may sit next to it.
         if (!_args.Demo && _args.ScreenshotsDir is null)
         {
@@ -86,6 +92,11 @@ public partial class App : Application
         _icons = new RankIconService([AppPaths.RankOverrideDir, AppPaths.RankAssetsDir], AppPaths.RankCacheDir, _http, LoggerFactory.CreateLogger<RankIconService>());
 
         BuildOverlay();
+        if (_settings.DownloadRankIcons)
+        {
+            _icons.PrefetchOfficialIcons();
+        }
+
         StartDataSource();
 
         if (_args.ExitAfterSeconds is { } seconds)
@@ -99,6 +110,35 @@ public partial class App : Application
             };
             timer.Start();
         }
+    }
+
+    /// <summary>
+    /// <c>--screenshots</c>: renders the panel states off-screen and quits. With <c>--official-icons</c> the official
+    /// rank icons are downloaded to the cache first (awaited here, so the UI thread stays free to receive them).
+    /// </summary>
+    private async Task RenderScreenshotsAsync(string directory)
+    {
+        try
+        {
+            RankIconService? icons = null;
+            if (_args.OfficialIcons)
+            {
+                _http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+                icons = new RankIconService([], AppPaths.RankCacheDir, _http, LoggerFactory.CreateLogger<RankIconService>());
+                await icons.EnsureOfficialIconsAsync(TimeSpan.FromSeconds(60));
+            }
+
+            foreach (var file in ScreenshotRenderer.RenderAll(directory, LoggerFactory, icons))
+            {
+                _log.LogInformation("Screenshot written: {File}", file);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Screenshot rendering failed");
+        }
+
+        Shutdown();
     }
 
     private void SetUpLogging()

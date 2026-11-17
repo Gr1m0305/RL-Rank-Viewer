@@ -3,9 +3,11 @@
 Put your own rank icon images in this folder (next to `RLOverlay.exe` after publishing), or in
 `%LOCALAPPDATA%\RLOverlay\ranks\`, which overrides this folder.
 
-The repository deliberately contains **no** Psyonix artwork. If a file is missing, the app uses the icon URL served
-by the stats provider at runtime (cached in `%LOCALAPPDATA%\RLOverlay\cache\ranks\`), and if that is unavailable,
-a simple built-in tier-coloured placeholder.
+You normally don't need to: on first start the app downloads the official in-game rank icons (from the CDN
+tracker.gg uses) into `%LOCALAPPDATA%\RLOverlay\cache\ranks\` and uses them from then on. Files here win over the
+download, so use this folder only if you want different artwork. The repository deliberately contains **no** rank
+artwork; while the download is running, or if it fails or is turned off in settings, a simple built-in placeholder
+is shown.
 
 * Format: **PNG** or **SVG**, transparent background, ideally **128×128** (icons render at 34 px).
 * File names are lower-case; use either `.png` or `.svg` (PNG wins if both exist).
