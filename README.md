@@ -7,8 +7,9 @@ default): rank, division, rating and how far to the next division, plus the stat
 Blue and Orange each get their own block, and the columns line up from player to player. Drag the header to move
 the panel and drag a corner to resize it. The panel fades out at kickoff, and clicking a name opens that player's
 full tracker.gg profile. After the match the whole lobby stays available (`Ctrl+R`) so you can look up who you just
-played, through freeplay and the menus, until you load into a new game with other players or close the game. The
-app waits quietly in the tray and switches on by itself when Rocket League starts. No account or API key is needed.
+played, through freeplay and the menus, until you load into a new game with other players or close the game.
+Players who quit early stay on the board too, marked *left the match*. The app waits quietly in the tray, switches
+on by itself when Rocket League starts and keeps itself up to date from GitHub. No account or API key is needed.
 
 ![The lobby screen (preview with made-up players)](docs/screenshots/01_screen_layout.png)
 
@@ -18,7 +19,7 @@ tracker.gg page. The repository holds no screenshots of tracker.gg pages because
 | Key | Does |
 |---|---|
 | `Ctrl+R` | Show / hide the lobby (works during the match too, where the next kickoff hides it again, and after the match) |
-| `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Tournaments, Casual. Every row moves at once, without reloading |
+| `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Heatseeker, Tournaments, Casual. Every row moves at once, without reloading |
 | Click a name | Opens that player's tracker.gg profile in your browser |
 | Drag the header | Moves the panel anywhere on the game's screen (the dotted grip on the right shows where to grab) |
 | Drag a corner | Resizes the panel, from 75 % to 150 % (blue brackets show the corners when the pointer is over them) |
@@ -63,7 +64,15 @@ reads the numbers, so nothing is stored, cached or sent anywhere else.
 * Steam players are found by their SteamID64. Epic, PlayStation, Xbox and Switch players are found by the name the
   game shows, which may not be the name on their tracker.gg profile.
 * tracker.gg gets what a normal visit sends: the profile addresses (so the player names) and its own cookies, kept
-  in `%LOCALAPPDATA%\RLOverlay\webview`. Its ads still load, hidden and muted.
+  in `%LOCALAPPDATA%\RLOverlay\webview`. Only tracker.gg itself loads (its pages, images, fonts and data, plus
+  Cloudflare's browser check): ads, video players and trackers are blocked, since they never showed anyway.
+
+**Keeping the game smooth.** Loading a lobby used to cost frames. Now at most three pages load at once, out of
+sight and at below-normal priority, without the page's ads and videos. Once a row is in, it is shown as a still
+picture taken from the page, and the browser stops sending frames to the overlay. Measured on a 2v2 lobby: about a
+quarter of the CPU time 0.4 needed to load it, GPU use from about 9 % to under 1 %, and about 0 % CPU once the
+rows are in (0.4 kept using around half a core for as long as the lobby was up). Switching playlist or stats crops
+the same pages again and takes new pictures, so it is still instant.
 
 ## Requirements
 
@@ -92,8 +101,9 @@ offers:
 
 ![Setup](docs/screenshots/11_setup.png)
 
-Running the setup again updates the installed copy (it closes the running one first). To remove it: *Settings →
-Apps → Gr1m's RL Overlay → Uninstall*. Your settings are kept unless you tick the box to delete them.
+Running the setup again updates the installed copy (it closes the running one first), but from 0.5 on new
+versions also install themselves (see [Updates](#updates)). To remove it: *Settings → Apps → Gr1m's RL Overlay →
+Uninstall*. Your settings are kept unless you tick the box to delete them.
 
 `publish/RLOverlay.exe` is the same program without installing: run it from any folder. Both files are about 70 MB
 and need no .NET install. They are not code-signed, so Windows SmartScreen may warn the first time; choose
@@ -138,6 +148,9 @@ Stats API on.
 * Clicking a name opens the full profile in your browser. While the browser is in front the overlay hides; alt-tab
   back to the game and it returns.
 * At kickoff the lobby fades out. `Ctrl+R` brings it back mid-match; the next kickoff hides it again.
+* **Players who leave** (quitters, dropped connections) stay on the board, dimmed and marked *left the match*, and
+  the team header counts them (*1 / 2 · 1 left*). They go with the rest of the lobby when the next game starts; if
+  they come back, the mark goes.
 * **After the match** the whole lobby is kept: press `Ctrl+R` on the podium, back in the menus or in freeplay to see
   everyone you just played with and click their names. Freeplay and training don't replace it. It is replaced once
   you load into a new game with at least one other player, and cleared when you close the game.
@@ -154,17 +167,34 @@ double-click opens Settings. Starting the exe again while it runs also opens Set
 The settings window covers the game connection (Stats API status per ini file, *Enable Stats API…*, the port), the
 **stats next to each rank** (Wins, Streak, Peak MMR, All-time peak, Goals, Shots, Assists, Saves, MVPs), which
 playlists `Ctrl+G` cycles through and the default, the two shortcuts (click a field and press the new combination),
-size (75 % to 150 %, with *Reset to top right* to put the panel back in its corner) and *Start with Windows*.
+size (75 % to 150 %, with *Reset to top right* to put the panel back in its corner), *Start with Windows* and
+*Update automatically*.
 **Preview** shows the lobby screen with made-up players while you adjust it, and you can drag it around and resize
 it there too; nothing is kept until you press **Save**.
 
 ![Settings](docs/screenshots/08_settings.png)
 
-**Updating from an earlier version:** 0.4 moves the panel once to the new top-right spot at 85 % and turns
+**Updating from an earlier version:** 0.5 adds Heatseeker to the playlists `Ctrl+G` cycles through and turns on
+*Update automatically*; 0.4 and older can't update themselves, so install 0.5 once by hand (download
+`Gr1msRLOverlay-Setup.exe` from the [latest release](https://github.com/Gr1m0305/RL-Rank-Viewer/releases/latest) and
+run it). 0.4 moves the panel once to the new top-right spot at 85 % and turns
 *Follow the match's playlist* off; drag it wherever you like afterwards. Your stats, shortcuts and playlists are
 kept. From 0.2 or older: the RapidAPI, tracker.gg-key and test-data sources, the `Ctrl+T` window and the rank icon
 downloads are gone; tracker.gg's rows are now the main screen, your stat choice starts once at the defaults (Wins,
 Streak, Peak MMR) and old API keys are dropped the next time settings are saved.
+
+## Updates
+
+From 0.5, the app looks for a new release on GitHub a minute after it starts and then every 6 hours. A newer
+version's setup file is downloaded in the background into `%LOCALAPPDATA%\RLOverlay\updates` and checked: its
+size, GitHub's SHA-256 checksum, and that it really is this app at that version. Only this repository's release
+files are accepted, and nothing about you is sent (the request carries only `RLOverlay/<version>`).
+
+With **Update automatically** on (the default), the installed copy installs the update the next time Rocket League
+is closed: setup runs without a window, replaces the app and starts the new version, which shows a short *Updated to
+version …* notice. It never installs in the middle of a game. With it off, or when running a copy that isn't the
+installed one, a notice says the update is ready. Settings → *General* shows what the updater found and has
+**Check for updates** and **Install … now** (which restarts the overlay).
 
 ## Try it without the game
 
@@ -216,6 +246,7 @@ dotnet test RLOverlay.sln
 | Shortcuts do nothing | They only work while Rocket League is in front. If another app already uses the combination, the log says so; pick another in Settings. |
 | Lobby in the wrong place or too wide | Drag its header or a corner (in a match, or with **Preview** on in Settings). Settings → *Position and size* → *Reset to top right* puts it back. Unticking some stats makes it narrower. |
 | The lobby after a match is gone | It is kept through freeplay and the menus, and replaced by the next game that has other players in it. Joining a match and leaving before anyone else arrives keeps it too. |
+| An update doesn't arrive | Settings → *General* says what the updater last found (for example no connection to GitHub). It installs only while Rocket League is closed; **Install … now** does it straight away. 0.4 and older have no updater: install 0.5 by hand once. |
 
 ## Files
 
@@ -224,6 +255,7 @@ dotnet test RLOverlay.sln
 | `%LOCALAPPDATA%\RLOverlay\settings.json` | settings |
 | `%LOCALAPPDATA%\RLOverlay\logs\` | daily logs, 7 kept |
 | `%LOCALAPPDATA%\RLOverlay\webview\` | the built-in browser's data (tracker.gg cookies and cache) |
+| `%LOCALAPPDATA%\RLOverlay\updates\` | a downloaded update's setup file, until it is installed |
 
 Earlier versions also kept `cache\`, `ranks\` and `rocket-league-api-usage.json` there; they are no longer used and
 can be deleted.

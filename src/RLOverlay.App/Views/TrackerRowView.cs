@@ -119,6 +119,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
     private readonly CancellationTokenSource _life = new();
     private int _snapshotVersion;
     private bool _snapshotStale;
+    private string? _pictureKey;
     private DateTime _loadStarted;
     private TrackerCropResult? _lastCrop;
 
@@ -628,6 +629,10 @@ internal sealed class TrackerRowView : Grid, IDisposable
                         _logger.LogInformation("Overlay: {Player}'s row is in ({Seconds:0.0} s)", Player.Name, (DateTime.UtcNow - _loadStarted).TotalSeconds);
                     }
 
+                    // The same crop of the same row again (tiles checked once more, widths re-aligned to the same values):
+                    // the picture already shows it.
+                    var pictureKey = $"{label}|{options.Key}|{string.Join(',', align)}";
+                    var unchanged = State == TrackerRowState.Cropped && pictureKey == _pictureKey && SameCrop(_lastCrop, result);
                     _lastCrop = result;
                     SetBandColour(result.Background);
                     _poll.Stop();
@@ -645,7 +650,12 @@ internal sealed class TrackerRowView : Grid, IDisposable
                     }
 
                     SetState(TrackerRowState.Cropped, "");
-                    _ = RefreshSnapshotAsync();
+                    if (!unchanged)
+                    {
+                        _pictureKey = pictureKey;
+                        _ = RefreshSnapshotAsync();
+                    }
+
                     break;
 
                 case TrackerCropStatus.NoRow:
@@ -695,6 +705,10 @@ internal sealed class TrackerRowView : Grid, IDisposable
         }
     }
 
+    private static bool SameCrop(TrackerCropResult? a, TrackerCropResult b) =>
+        a is not null && a.Width == b.Width && a.Height == b.Height && a.Background == b.Background && a.Missing == b.Missing
+        && (a.Cells ?? []).SequenceEqual(b.Cells ?? []);
+
     private void SetBandColour(string? css)
     {
         var colour = TrackerPage.TryParseCssColor(css, out var r, out var g, out var b) ? Color.FromRgb(r, g, b) : DefaultBand;
@@ -740,6 +754,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
             {
                 _snapshotVersion++;
                 _snapshotStale = false;
+                _pictureKey = null;
                 _snapshot.Visibility = Visibility.Collapsed;
                 _web.Visibility = state == TrackerRowState.ShowingPage ? Visibility.Visible : Visibility.Hidden;
             }
