@@ -37,7 +37,7 @@ public sealed class SettingsStore
         try
         {
             var settings = JsonSerializer.Deserialize<OverlaySettings>(File.ReadAllText(FilePath), JsonOptions);
-            return (settings ?? new OverlaySettings()).Normalize();
+            return (settings ?? new OverlaySettings()).Upgrade().Normalize();
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {

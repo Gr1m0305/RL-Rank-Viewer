@@ -6,7 +6,6 @@ using RLOverlay.App.Services;
 using RLOverlay.App.ViewModels;
 using RLOverlay.App.Views;
 using RLOverlay.Core.Config;
-using RLOverlay.Core.Providers;
 using RLOverlay.Core.StatsApi;
 
 namespace RLOverlay.App;
@@ -16,7 +15,6 @@ public partial class App : ISettingsHost
 {
     private SettingsWindow? _settingsWindow;
     private ScenarioFeed? _previewFeed;
-    private IPlayerStatsProvider? _previewProvider;
     private bool _hotkeysSuspended;
 
     /// <summary>Opens the settings window, or brings it to the front if it is already open.</summary>
@@ -45,12 +43,6 @@ public partial class App : ISettingsHost
     }
 
     OverlaySettings ISettingsHost.Current => _settings;
-
-    bool ISettingsHost.HasApiKey => !string.IsNullOrEmpty(_settings.ProtectedApiKey);
-
-    bool ISettingsHost.HasRocketLeagueApiKey => !string.IsNullOrEmpty(_settings.ProtectedRocketLeagueApiKey);
-
-    int ISettingsHost.LookupsThisMonth => LookupBudget.UsedThisMonth;
 
     bool ISettingsHost.RunAtStartup => _startup?.IsEnabled == true;
 
@@ -90,8 +82,9 @@ public partial class App : ISettingsHost
     }
 
     /// <summary>
-    /// Preview: the demo lobby with test data, shown even though the game is not in front, using the settings as edited
-    /// (columns, playlists, position, size). Real Stats API messages are ignored until it stops.
+    /// Preview: the demo lobby (made-up players, so placeholders where tracker.gg's rows go), shown even though the game
+    /// is not in front, using the settings as edited (stats, playlists, position, size). Real Stats API messages are
+    /// ignored until it stops.
     /// </summary>
     private void StartPreview(OverlaySettings settings)
     {
@@ -102,8 +95,7 @@ public partial class App : ISettingsHost
 
         _feed?.Stop(); // --demo: the preview replaces the demo lobby
         ApplyLook(settings);
-        _previewProvider = new MockStatsProvider();
-        _coordinator.BeginPreview(_previewProvider);
+        _coordinator.BeginPreview();
         UpdateForegroundGate();
         _previewFeed = new ScenarioFeed(ScenarioFeed.LoadEmbedded("demo_lobby.json"), _coordinator.Handle, _log);
         _previewFeed.Start();
@@ -121,7 +113,6 @@ public partial class App : ISettingsHost
         _coordinator.EndPreview();
         ApplyLook(_settings);
         UpdateForegroundGate();
-        SyncTrackerWindow();
         _log.LogInformation("Preview stopped");
     }
 
@@ -131,18 +122,16 @@ public partial class App : ISettingsHost
         _previewFeed = null;
     }
 
-    /// <summary>Panel (columns, playlists, key caps) and placement; nothing saved, no provider change.</summary>
+    /// <summary>The screen (stats, playlists, key caps) and its placement and size; nothing saved.</summary>
     private void ApplyLook(OverlaySettings settings)
     {
         _coordinator!.ApplySettings(settings);
+        _panelView!.SetZoom(Math.Clamp(settings.Scale, OverlaySettings.MinScale, OverlaySettings.MaxScale));
         _window!.Configure(() => _tracker!.FindGameWindow(), settings.OffsetX, settings.OffsetY, settings.Scale);
     }
 
-    void ISettingsHost.Save(OverlaySettings settings, ApiKeyEdit trackerGgKey, ApiKeyEdit rocketLeagueApiKey, bool runAtStartup)
+    void ISettingsHost.Save(OverlaySettings settings, bool runAtStartup)
     {
-        settings.ProtectedApiKey = Apply(trackerGgKey, settings.ProtectedApiKey);
-        settings.ProtectedRocketLeagueApiKey = Apply(rocketLeagueApiKey, settings.ProtectedRocketLeagueApiKey);
-
         var old = _settings;
         _settings = settings;
         _store!.Save(settings);
@@ -150,22 +139,6 @@ public partial class App : ISettingsHost
 
         ApplyLook(settings);
         ApplyHotkeyBindings();
-
-        if (settings.Provider != old.Provider || settings.ProtectedApiKey != old.ProtectedApiKey
-            || settings.ProtectedRocketLeagueApiKey != old.ProtectedRocketLeagueApiKey
-            || settings.CacheTtlMinutes != old.CacheTtlMinutes || settings.RequestsPerMinute != old.RequestsPerMinute)
-        {
-            var previous = _provider;
-            _provider = CreateProvider();
-            _coordinator!.ReplaceProvider(_provider);
-            previous?.Dispose();
-        }
-
-        _icons!.SetUseDownloads(settings.DownloadRankIcons);
-        if (settings.DownloadRankIcons && !old.DownloadRankIcons)
-        {
-            _icons.PrefetchOfficialIcons();
-        }
 
         if (_active && _args.Port is null && settings.StatsApiPort != old.StatsApiPort)
         {
@@ -179,7 +152,6 @@ public partial class App : ISettingsHost
         }
 
         _tray?.SetToggleLabel(_window?.PanelOn == true, settings.ToggleHotkey);
-        SyncTrackerWindow();
         UpdateTrayStatus();
     }
 
@@ -234,30 +206,6 @@ public partial class App : ISettingsHost
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception)
         {
             _log.LogWarning("Could not open {Path}: {Error}", path, ex.Message);
-        }
-    }
-
-    void ISettingsHost.OpenUrl(string url)
-    {
-        // Only the two fixed "get a key" links; profile links go through LinkOpener.
-        if (url is SettingsViewModel.ApiKeyPortalUrl or SettingsViewModel.RocketLeagueApiUrl)
-        {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
-        }
-    }
-
-    /// <summary>A new key is encrypted and replaces the saved one; Clear removes it; otherwise it is kept.</summary>
-    private static string? Apply(ApiKeyEdit edit, string? saved) =>
-        edit.Clear ? null
-        : edit.NewKey is { } key ? ApiKeyProtector.Protect(key) ?? saved
-        : saved;
-
-    void ISettingsHost.ClearRankIconCache()
-    {
-        _icons!.ClearDownloads();
-        if (_settings.DownloadRankIcons)
-        {
-            _icons.PrefetchOfficialIcons();
         }
     }
 }

@@ -11,7 +11,7 @@ namespace RLOverlay.App.Views;
 public partial class SettingsWindow : Window
 {
     private const string DefaultShortcutHint =
-        "Click a shortcut, then press the new keys (Ctrl, Alt, Shift or Win plus a key). They only work while Rocket League or the tracker.gg lobby window is in front.";
+        "Click a shortcut, then press the new keys (Ctrl, Alt, Shift or Win plus a key). They only work while Rocket League is in front.";
 
     private readonly SettingsViewModel _vm;
     private Button? _recordingButton;
@@ -45,12 +45,7 @@ public partial class SettingsWindow : Window
         _ = NativeMethods.DwmSetWindowAttribute(hwnd, NativeMethods.DWMWA_USE_IMMERSIVE_DARK_MODE, ref on, sizeof(int));
     }
 
-    private void OnApiKeyChanged(object sender, RoutedEventArgs e) => _vm.ApiKeyInput = ApiKeyBox.Password;
-
-    private void OnRlApiKeyChanged(object sender, RoutedEventArgs e) => _vm.RlApiKeyInput = RlApiKeyBox.Password;
-
-    private string Target(Button button) =>
-        button == ToggleKeyField ? "toggle" : button == TrackerKeyField ? "tracker" : "cycle";
+    private string Target(Button button) => button == ToggleKeyField ? "toggle" : "cycle";
 
     private void OnShortcutClicked(object sender, RoutedEventArgs e)
     {

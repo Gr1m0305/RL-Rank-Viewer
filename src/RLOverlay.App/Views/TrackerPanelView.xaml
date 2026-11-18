@@ -1,0 +1,67 @@
+<UserControl x:Class="RLOverlay.App.Views.TrackerPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:RLOverlay.App.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:PanelViewModel}"
+             FontFamily="{StaticResource UiFont}"
+             Foreground="{StaticResource TextPrimary}"
+             Focusable="False">
+    <Grid>
+        <!-- Soft shadow on its own layer so text is not rendered through an effect. -->
+        <Border CornerRadius="12" Background="#FF0A0C10" Margin="3">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="22" ShadowDepth="5" Direction="270" Opacity="0.55" Color="Black" />
+            </Border.Effect>
+        </Border>
+        <Border CornerRadius="12"
+                Background="{StaticResource PanelBackground}"
+                BorderBrush="{StaticResource PanelBorder}"
+                BorderThickness="1"
+                Padding="14,11,14,10">
+            <StackPanel MinWidth="560">
+                <!-- Header: app badge, playlist title, subtitle; hotkey hints on the right. -->
+                <DockPanel x:Name="HeaderRow" Margin="1,0,0,9">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                        <ItemsControl ItemsSource="{Binding CycleKeys}"
+                                      ItemTemplate="{StaticResource KeyCapTemplate}"
+                                      ItemsPanel="{StaticResource HorizontalPanel}"
+                                      Focusable="False" />
+                        <TextBlock Text="Playlist" FontSize="11" Foreground="{StaticResource TextSecondary}"
+                                   VerticalAlignment="Center" Margin="1,0,10,0" />
+                        <ItemsControl ItemsSource="{Binding ToggleKeys}"
+                                      ItemTemplate="{StaticResource KeyCapTemplate}"
+                                      ItemsPanel="{StaticResource HorizontalPanel}"
+                                      Focusable="False" />
+                        <TextBlock Text="Hide" FontSize="11" Foreground="{StaticResource TextSecondary}"
+                                   VerticalAlignment="Center" Margin="1,0,0,0" />
+                    </StackPanel>
+                    <Border Width="22" Height="22" CornerRadius="6" Background="{StaticResource AppBadgeBrush}" VerticalAlignment="Center">
+                        <TextBlock Text="R" FontSize="12" FontWeight="Bold" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
+                               Margin="10,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Subtitle}" FontSize="12.5" Foreground="{StaticResource TextSecondary}"
+                               Margin="8,2,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+
+                <!-- Team blocks and player rows. Rows are placed with Grid.Row and never moved to another parent, so a
+                     player's page isn't reloaded when they change team. -->
+                <Grid x:Name="RowsHost" />
+
+                <DockPanel x:Name="FooterRow" Margin="1,8,1,0">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding FooterRight}" FontSize="11"
+                               Foreground="{StaticResource TextMuted}" Margin="16,0,0,0" />
+                    <Ellipse Width="6" Height="6" Margin="0,0,6,0" VerticalAlignment="Center"
+                             Fill="{StaticResource WaitingYellow}"
+                             Visibility="{Binding IsWaiting, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="{Binding FooterLeft}" FontSize="11" Foreground="{StaticResource TextMuted}"
+                               TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

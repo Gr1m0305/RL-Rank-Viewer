@@ -1,22 +1,19 @@
 using CommunityToolkit.Mvvm.ComponentModel;
-using RLOverlay.App.Services;
+using RLOverlay.Core;
 using RLOverlay.Core.Config;
 using RLOverlay.Core.Lobby;
-using RLOverlay.Core.Players;
 using RLOverlay.Core.Playlists;
 
 namespace RLOverlay.App.ViewModels;
 
 /// <summary>
-/// Everything the panel shows. The <see cref="Services.OverlayCoordinator"/> feeds it lobby changes and profiles; it
-/// keeps rows in join order, adds "Joining…" seats while the lobby fills, and re-renders every row when the playlist
-/// changes.
+/// What the overlay screen shows: the lobby (in join order), the selected playlist, the stats picked in the settings,
+/// and the header and footer text. The <see cref="Services.OverlayCoordinator"/> feeds it lobby changes; the
+/// <see cref="Views.TrackerPanelView"/> turns each player into a row with their tracker.gg page.
 /// </summary>
 public sealed partial class PanelViewModel : ObservableObject
 {
-    private readonly RankIconService _icons;
-    private readonly List<PlayerRowViewModel> _players = [];
-    private readonly Dictionary<int, List<PlayerRowViewModel>> _seats = new() { [0] = [], [1] = [] };
+    private readonly List<LobbyPlayer> _players = [];
 
     [ObservableProperty]
     private Playlist _playlist = Playlist.Doubles;
@@ -48,15 +45,14 @@ public sealed partial class PanelViewModel : ObservableObject
     [ObservableProperty]
     private bool _showSwitchedNote;
 
-    public PanelViewModel(RankIconService icons)
-    {
-        _icons = icons;
-        Refresh();
-    }
+    /// <summary>
+    /// The settings Preview (or <c>--demo</c>): the players are made up, so rows show where tracker.gg's rows go
+    /// instead of loading pages.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isSample;
 
-    public TeamViewModel Blue { get; } = new(0);
-
-    public TeamViewModel Orange { get; } = new(1);
+    public PanelViewModel() => Refresh();
 
     public PlaylistStripViewModel Strip { get; } = new();
 
@@ -67,7 +63,20 @@ public sealed partial class PanelViewModel : ObservableObject
 
     public IReadOnlyList<Playlist> EnabledPlaylists { get; private set; } = Enum.GetValues<Playlist>();
 
-    public IReadOnlyList<PlayerRowViewModel> Players => _players;
+    /// <summary>tracker.gg's label for the selected playlist's row ("Ranked Doubles 2v2").</summary>
+    public string RowLabel => TrackerPage.RowLabel(Playlist);
+
+    /// <summary>What to crop next to each rank, from <see cref="Columns"/>.</summary>
+    public TrackerCropOptions CropOptions { get; private set; } = TrackerCropOptions.From(new StatColumns());
+
+    /// <summary>The players the screen shows (updated by <see cref="Refresh"/>, so it holds still while frozen).</summary>
+    public IReadOnlyList<LobbyPlayer> ShownPlayers { get; private set; } = [];
+
+    /// <summary>Goes up with every new match, so the screen can reload pages that are older than the last match.</summary>
+    public int MatchNumber { get; private set; }
+
+    /// <summary>Raised by <see cref="Refresh"/> after <see cref="ShownPlayers"/> was recomputed.</summary>
+    public event Action? RosterRefreshed;
 
     public void ApplySettings(OverlaySettings settings)
     {
@@ -89,6 +98,15 @@ public sealed partial class PanelViewModel : ObservableObject
         Refresh();
     }
 
+    partial void OnColumnsChanged(StatColumns value) => CropOptions = TrackerCropOptions.From(value);
+
+    /// <summary>A new match: forget the old roster.</summary>
+    public void NewMatch()
+    {
+        MatchNumber++;
+        Clear();
+    }
+
     public void Clear()
     {
         _players.Clear();
@@ -97,24 +115,19 @@ public sealed partial class PanelViewModel : ObservableObject
         Refresh();
     }
 
-    public PlayerRowViewModel? Find(string key) => _players.Find(p => p.Key == key);
-
-    public PlayerRowViewModel AddOrUpdate(LobbyPlayer player)
+    public void AddOrUpdate(LobbyPlayer player)
     {
-        var row = Find(player.Key);
-        if (row is null)
+        var index = _players.FindIndex(p => p.Key == player.Key);
+        if (index < 0)
         {
-            row = PlayerRowViewModel.ForPlayer(player);
-            _players.Add(row);
-            row.Render(Playlist, _icons);
+            _players.Add(player);
         }
         else
         {
-            row.UpdatePlayer(player);
+            _players[index] = player;
         }
 
         Refresh();
-        return row;
     }
 
     public void Remove(string key)
@@ -125,46 +138,24 @@ public sealed partial class PanelViewModel : ObservableObject
         }
     }
 
-    public void SetProfile(string key, PlayerProfile? profile)
-    {
-        if (Find(key) is not { } row)
-        {
-            return;
-        }
-
-        row.SetProfile(profile);
-        row.Render(Playlist, _icons);
-        Refresh();
-    }
-
-    public void OnIconUpdated(int tier)
-    {
-        foreach (var row in _players.Where(r => r.Tier == tier))
-        {
-            row.RefreshIcon(_icons);
-        }
-    }
-
     partial void OnPlaylistChanged(Playlist value)
     {
-        foreach (var row in _players)
-        {
-            row.Render(value, _icons);
-        }
-
+        OnPropertyChanged(nameof(RowLabel));
         Strip.Update(value, EnabledPlaylists);
         Refresh();
     }
 
     partial void OnShowSwitchedNoteChanged(bool value) => Refresh();
 
+    partial void OnIsSampleChanged(bool value) => Refresh();
+
     /// <summary>
-    /// While true, <see cref="Refresh"/> leaves the panel as it is. Set while the panel fades out, so the text and
-    /// rows don't change mid-fade (e.g. the footer flipping to "Ctrl+R to hide" at kickoff); cleared before it shows.
+    /// While true, <see cref="Refresh"/> leaves the screen as it is. Set while it fades out, so rows and text don't
+    /// change mid-fade (e.g. the footer flipping at kickoff); cleared before it shows.
     /// </summary>
     public bool IsFrozen { get; set; }
 
-    /// <summary>Recomputes team rows, seats, counts, header and footer text.</summary>
+    /// <summary>Recomputes the roster, header and footer text.</summary>
     public void Refresh()
     {
         if (IsFrozen)
@@ -174,55 +165,42 @@ public sealed partial class PanelViewModel : ObservableObject
 
         var info = PlaylistCatalog.Get(Playlist);
         Title = info.Title;
-        var season = _players.Select(p => p.Profile?.Season).Max();
-        Subtitle = info.Subtitle + (ShowSwitchedNote
-            ? $" · switched with {string.Join("+", CycleKeys)}"
-            : season is { } s ? $" · Season {s}" : "");
+        Subtitle = info.Subtitle + (ShowSwitchedNote ? $" · switched with {string.Join("+", CycleKeys)}" : " · tracker.gg");
 
-        var blue = _players.Where(p => p.TeamNum == 0).ToList();
-        var orange = _players.Where(p => p.TeamNum == 1).ToList();
-        var teamSize = MatchTeamSize ?? Math.Max(1, Math.Max(blue.Count, orange.Count));
-        var showSeats = Phase == MatchPhase.PreKickoff;
+        var blue = _players.Count(p => p.TeamNum == 0);
+        var orange = _players.Count(p => p.TeamNum == 1);
+        var teamSize = MatchTeamSize ?? Math.Max(1, Math.Max(blue, orange));
+        var expected = Phase == MatchPhase.PreKickoff ? teamSize * 2 : 0;
+        IsWaiting = Phase != MatchPhase.Idle && blue + orange < expected;
+        var hide = $"{string.Join("+", ToggleKeys)} to hide";
 
-        Layout(Blue, blue, showSeats ? teamSize - blue.Count : 0);
-        Layout(Orange, orange, showSeats ? teamSize - orange.Count : 0);
-        Blue.CountText = Phase == MatchPhase.Idle ? "" : $"{blue.Count} / {Math.Max(teamSize, blue.Count)}";
-        Orange.CountText = Phase == MatchPhase.Idle ? "" : $"{orange.Count} / {Math.Max(teamSize, orange.Count)}";
-
-        var seated = blue.Count + orange.Count;
-        var loaded = blue.Concat(orange).Count(p => !p.IsPending);
-        var total = Math.Max(seated, showSeats ? teamSize * 2 : 0);
-        IsWaiting = Phase != MatchPhase.Idle && loaded < total;
-
-        if (Phase == MatchPhase.Idle)
+        if (Phase == MatchPhase.Idle && _players.Count == 0)
         {
-            FooterLeft = "Not in a match. The panel fills in when you load into one.";
-            FooterRight = $"{string.Join("+", ToggleKeys)} to hide";
+            FooterLeft = "Not in a match. Every player's tracker.gg row appears here when you load into one.";
+            FooterRight = hide;
+        }
+        else if (IsSample)
+        {
+            FooterLeft = "Preview with made-up players · in a match each row is that player's tracker.gg page";
+            FooterRight = hide;
         }
         else if (IsWaiting)
         {
-            FooterLeft = $"{(seated < total ? "Waiting for players" : "Fetching ranks")} · {loaded} of {total} loaded";
+            FooterLeft = $"Waiting for players · {blue + orange} of {expected} in";
             FooterRight = "Updates live";
         }
         else
         {
             FooterLeft = Phase == MatchPhase.Ended
-                ? "Match over · click a name to open their tracker profile"
-                : "Click a name to open their tracker profile";
-            FooterRight = Phase == MatchPhase.PreKickoff ? "Hides at kickoff" : $"{string.Join("+", ToggleKeys)} to hide";
-        }
-    }
-
-    private void Layout(TeamViewModel team, List<PlayerRowViewModel> players, int seatCount)
-    {
-        var seats = _seats[team.TeamNum];
-        while (seats.Count < seatCount)
-        {
-            seats.Add(PlayerRowViewModel.Seat(team.TeamNum, seats.Count));
+                ? "Match over · click a name for the full tracker.gg profile"
+                : "Rows from tracker.gg · click a name for the full profile";
+            FooterRight = Phase == MatchPhase.PreKickoff ? "Hides at kickoff" : hide;
         }
 
-        var desired = new List<PlayerRowViewModel>(players);
-        desired.AddRange(seats.Take(Math.Max(0, seatCount)));
-        team.SyncRows(desired);
+        ShownPlayers = _players.ToList();
+        RosterRefreshed?.Invoke();
     }
+
+    /// <summary>Expected players per team for the team headers ("1 / 2").</summary>
+    public int TeamSize(int blueCount, int orangeCount) => MatchTeamSize ?? Math.Max(1, Math.Max(blueCount, orangeCount));
 }

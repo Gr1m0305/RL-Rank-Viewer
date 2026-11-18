@@ -14,21 +14,12 @@ public interface ISettingsHost
 {
     OverlaySettings Current { get; }
 
-    /// <summary>A tracker.gg key is saved.</summary>
-    bool HasApiKey { get; }
-
-    /// <summary>A Rocket League API (RapidAPI) key is saved.</summary>
-    bool HasRocketLeagueApiKey { get; }
-
-    /// <summary>Rocket League API requests made this calendar month.</summary>
-    int LookupsThisMonth { get; }
-
     bool RunAtStartup { get; }
 
     /// <summary>"Connected to Rocket League" / "Waiting for Rocket League" / "Demo".</summary>
     string ConnectionStatus { get; }
 
-    /// <summary>Starts or stops the on-screen Preview (demo lobby with test data) using these settings.</summary>
+    /// <summary>Starts or stops the on-screen Preview (made-up lobby) using these settings.</summary>
     void SetPreview(bool on, OverlaySettings settings);
 
     /// <summary>Applies look and placement live while the Preview runs.</summary>
@@ -37,23 +28,13 @@ public interface ISettingsHost
     /// <summary>Global hotkeys off while a new shortcut is being recorded.</summary>
     void SuspendHotkeys(bool suspended);
 
-    void Save(OverlaySettings settings, ApiKeyEdit trackerGgKey, ApiKeyEdit rocketLeagueApiKey, bool runAtStartup);
+    void Save(OverlaySettings settings, bool runAtStartup);
 
     (string Summary, IReadOnlyList<StatsApiFileStatus> Files) StatsApiStatus();
 
     Task<StatsApiEnableOutcome> EnableStatsApiAsync();
 
     void OpenFolder(string path);
-
-    void OpenUrl(string url);
-
-    void ClearRankIconCache();
-}
-
-/// <summary>What to do with a saved API key on Save: a new key replaces it, Clear removes it, neither keeps it.</summary>
-public sealed record ApiKeyEdit(string? NewKey, bool Clear)
-{
-    public static ApiKeyEdit Keep { get; } = new(null, false);
 }
 
 public sealed partial class PlaylistOption(Playlist playlist, string label, bool isEnabled) : ObservableObject
@@ -85,14 +66,9 @@ public sealed record StatsApiFileRow(string Path, string State, bool IsOn);
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
-    public const string ApiKeyPortalUrl = "https://tracker.gg/developers";
-
-    /// <summary>Where to subscribe to the Rocket League API and copy the RapidAPI key.</summary>
-    public const string RocketLeagueApiUrl = "https://rapidapi.com/TonyKun7/api/rocket-league10/pricing";
-
     private static readonly string[] LiveProperties =
     [
-        nameof(OffsetX), nameof(OffsetY), nameof(ScalePercent), nameof(ToggleHotkey), nameof(CycleHotkey), nameof(TrackerHotkey), nameof(DefaultPlaylist),
+        nameof(OffsetX), nameof(OffsetY), nameof(ScalePercent), nameof(ToggleHotkey), nameof(CycleHotkey), nameof(DefaultPlaylist),
     ];
 
     private readonly ISettingsHost _host;
@@ -128,18 +104,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         _followMatchPlaylist = _original.FollowMatchPlaylist;
         _toggleHotkey = Display(_original.ToggleHotkey, "Ctrl+R");
         _cycleHotkey = Display(_original.CycleHotkey, "Ctrl+G");
-        _trackerHotkey = Display(_original.TrackerHotkey, "Ctrl+T");
         _offsetX = _original.OffsetX;
         _offsetY = _original.OffsetY;
         _scalePercent = Math.Round(_original.Scale * 100);
-        _providerChoice = _original.Provider;
-        _hasStoredKey = host.HasApiKey;
-        _hasStoredRlApiKey = host.HasRocketLeagueApiKey;
-        _maxLookupsPerMonth = _original.MaxLookupsPerMonth;
-        _lookupsThisMonth = host.LookupsThisMonth;
-        _cacheTtlMinutes = _original.CacheTtlMinutes;
-        _requestsPerMinute = _original.RequestsPerMinute;
-        _downloadRankIcons = _original.DownloadRankIcons;
         _notifyWhenGameStarts = _original.NotifyWhenGameStarts;
         _runAtStartup = host.RunAtStartup;
         _portText = _original.StatsApiPort?.ToString(CultureInfo.InvariantCulture) ?? "";
@@ -181,10 +148,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string _cycleHotkey;
 
-    [ObservableProperty]
-    private string _trackerHotkey;
-
-    /// <summary>"toggle" / "cycle" / "tracker" while that shortcut is being recorded, else null.</summary>
+    /// <summary>"toggle" / "cycle" while that shortcut is being recorded, else null.</summary>
     [ObservableProperty]
     private string? _recording;
 
@@ -199,91 +163,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     private double _scalePercent;
 
     public string ScaleText => $"{ScalePercent:0} %";
-
-    /// <summary>One of <see cref="ProviderNames"/>; the three radio buttons below edit it.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(UseRocketLeagueApi), nameof(UseTrackerGg), nameof(UseMockData))]
-    private string _providerChoice;
-
-    public bool UseRocketLeagueApi
-    {
-        get => ProviderChoice == ProviderNames.RocketLeagueApi;
-        set => Choose(ProviderNames.RocketLeagueApi, value);
-    }
-
-    public bool UseTrackerGg
-    {
-        get => ProviderChoice == ProviderNames.TrackerGg;
-        set => Choose(ProviderNames.TrackerGg, value);
-    }
-
-    public bool UseMockData
-    {
-        get => ProviderChoice == ProviderNames.Mock;
-        set => Choose(ProviderNames.Mock, value);
-    }
-
-    // A radio button that gets unchecked sends false: only the newly checked one changes the choice.
-    private void Choose(string provider, bool on)
-    {
-        if (on)
-        {
-            ProviderChoice = provider;
-        }
-    }
-
-    /// <summary>A newly typed Rocket League API key (empty = keep the stored one).</summary>
-    [ObservableProperty]
-    private string _rlApiKeyInput = "";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RlApiKeyStatus))]
-    private bool _hasStoredRlApiKey;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(RlApiKeyStatus))]
-    private bool _clearRlApiKey;
-
-    public string RlApiKeyStatus => ClearRlApiKey ? "The saved key will be removed when you save."
-        : HasStoredRlApiKey ? "A key is saved (encrypted for your Windows account). Type a new one to replace it."
-        : "No key saved yet.";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LookupUsage))]
-    private int _maxLookupsPerMonth;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LookupUsage))]
-    private int _lookupsThisMonth;
-
-    public string LookupUsage => MaxLookupsPerMonth > 0
-        ? $"{LookupsThisMonth:N0} of {MaxLookupsPerMonth:N0} used this month."
-        : $"{LookupsThisMonth:N0} used this month (no limit).";
-
-    /// <summary>A newly typed key (empty = keep the stored one).</summary>
-    [ObservableProperty]
-    private string _apiKeyInput = "";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(KeyStatus))]
-    private bool _hasStoredKey;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(KeyStatus))]
-    private bool _clearKey;
-
-    public string KeyStatus => ClearKey ? "The saved key will be removed when you save."
-        : HasStoredKey ? "A key is saved (encrypted for your Windows account). Type a new one to replace it."
-        : "No key saved yet.";
-
-    [ObservableProperty]
-    private int _cacheTtlMinutes;
-
-    [ObservableProperty]
-    private int _requestsPerMinute;
-
-    [ObservableProperty]
-    private bool _downloadRankIcons;
 
     [ObservableProperty]
     private bool _notifyWhenGameStarts;
@@ -319,17 +198,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Called by the window when a shortcut was pressed while recording.</summary>
     public void SetHotkey(string target, HotkeyGesture gesture)
     {
-        switch (target)
+        if (target == "toggle")
         {
-            case "toggle":
-                ToggleHotkey = gesture.ToString();
-                break;
-            case "tracker":
-                TrackerHotkey = gesture.ToString();
-                break;
-            default:
-                CycleHotkey = gesture.ToString();
-                break;
+            ToggleHotkey = gesture.ToString();
+        }
+        else
+        {
+            CycleHotkey = gesture.ToString();
         }
 
         Error = null;
@@ -367,15 +242,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         };
         s.ToggleHotkey = ToggleHotkey;
         s.CycleHotkey = CycleHotkey;
-        s.TrackerHotkey = TrackerHotkey;
         s.OffsetX = Math.Round(OffsetX);
         s.OffsetY = Math.Round(OffsetY);
         s.Scale = Math.Round(ScalePercent) / 100;
-        s.Provider = ProviderChoice;
-        s.MaxLookupsPerMonth = MaxLookupsPerMonth;
-        s.CacheTtlMinutes = CacheTtlMinutes;
-        s.RequestsPerMinute = RequestsPerMinute;
-        s.DownloadRankIcons = DownloadRankIcons;
         s.NotifyWhenGameStarts = NotifyWhenGameStarts;
         s.StatsApiPort = int.TryParse(PortText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) ? port : null;
         return s.Normalize();
@@ -384,15 +253,14 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Null when the edits can be saved, else what to fix.</summary>
     public string? Validate()
     {
-        if (!HotkeyGesture.TryParse(ToggleHotkey, out var toggle) || !HotkeyGesture.TryParse(CycleHotkey, out var cycle)
-            || !HotkeyGesture.TryParse(TrackerHotkey, out var tracker))
+        if (!HotkeyGesture.TryParse(ToggleHotkey, out var toggle) || !HotkeyGesture.TryParse(CycleHotkey, out var cycle))
         {
             return "Each shortcut needs Ctrl, Alt, Shift or Win plus a key.";
         }
 
-        if (toggle == cycle || toggle == tracker || cycle == tracker)
+        if (toggle == cycle)
         {
-            return "Each shortcut must be different.";
+            return "The two shortcuts must be different.";
         }
 
         var port = PortText.Trim();
@@ -401,7 +269,6 @@ public sealed partial class SettingsViewModel : ObservableObject
             return "The port must be a number from 1 to 65535 (or empty to read it from the game's ini).";
         }
 
-        // A missing API key is allowed: rows show "No data" until one is added.
         return null;
     }
 
@@ -421,14 +288,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             _host.SetPreview(false, Build());
         }
 
-        _host.Save(Build(), Edit(ApiKeyInput, ClearKey), Edit(RlApiKeyInput, ClearRlApiKey), RunAtStartup);
+        _host.Save(Build(), RunAtStartup);
         CloseRequested?.Invoke(true);
-    }
-
-    private static ApiKeyEdit Edit(string input, bool clear)
-    {
-        var key = input.Trim();
-        return key.Length > 0 ? new ApiKeyEdit(key, false) : new ApiKeyEdit(null, clear);
     }
 
     [RelayCommand]
@@ -471,52 +332,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         ScalePercent = 100;
         _suppressLive = false;
         LiveApply();
-    }
-
-    [RelayCommand]
-    private void RemoveKey()
-    {
-        ApiKeyInput = "";
-        ClearKey = true;
-    }
-
-    partial void OnApiKeyInputChanged(string value)
-    {
-        if (value.Trim().Length > 0)
-        {
-            ClearKey = false;
-        }
-    }
-
-    [RelayCommand]
-    private void GetApiKey() => _host.OpenUrl(ApiKeyPortalUrl);
-
-    [RelayCommand]
-    private void RemoveRlApiKey()
-    {
-        RlApiKeyInput = "";
-        ClearRlApiKey = true;
-    }
-
-    partial void OnRlApiKeyInputChanged(string value)
-    {
-        if (value.Trim().Length > 0)
-        {
-            ClearRlApiKey = false;
-        }
-    }
-
-    [RelayCommand]
-    private void GetRlApiKey() => _host.OpenUrl(RocketLeagueApiUrl);
-
-    [RelayCommand]
-    private void OpenIconsFolder() => _host.OpenFolder(AppPaths.RankOverrideDir);
-
-    [RelayCommand]
-    private void RedownloadIcons()
-    {
-        _host.ClearRankIconCache();
-        EnableMessage = null;
     }
 
     [RelayCommand]

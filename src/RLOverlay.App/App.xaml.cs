@@ -1,5 +1,4 @@
 using System.IO;
-using System.Net.Http;
 using System.Threading;
 using System.Windows;
 using System.Windows.Threading;
@@ -9,7 +8,6 @@ using RLOverlay.App.Services;
 using RLOverlay.App.ViewModels;
 using RLOverlay.App.Views;
 using RLOverlay.Core.Config;
-using RLOverlay.Core.Providers;
 using RLOverlay.Core.StatsApi;
 using Serilog;
 using Serilog.Extensions.Logging;
@@ -17,8 +15,8 @@ using Serilog.Extensions.Logging;
 namespace RLOverlay.App;
 
 /// <summary>
-/// Application entry and composition root (no DI container): logging, settings, stats provider, Stats API client or
-/// demo feed, lobby coordinator, overlay window, hotkeys, game-window tracker, tray icon and settings window
+/// Application entry and composition root (no DI container): logging, settings, Stats API client or demo feed, lobby
+/// coordinator, overlay window with the tracker.gg screen, hotkeys, game-window tracker, tray icon and settings window
 /// (the <see cref="ISettingsHost"/> side lives in App.Settings.cs).
 /// </summary>
 public partial class App : Application
@@ -35,11 +33,8 @@ public partial class App : Application
     private AppArgs _args = new();
     private SettingsStore? _store;
     private OverlaySettings _settings = new();
-    private HttpClient? _http;
-    private RankIconService? _icons;
-    private CachingStatsProvider? _provider;
-    private LookupBudget? _lookupBudget;
     private PanelViewModel? _panel;
+    private TrackerPanelView? _panelView;
     private OverlayWindow? _window;
     private HotkeyManager? _hotkeys;
     private GameWindowTracker? _tracker;
@@ -128,16 +123,7 @@ public partial class App : Application
         _settings = _store.Load();
         _startup = new StartupRegistration(LoggerFactory.CreateLogger<StartupRegistration>());
 
-        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-        _icons = new RankIconService([AppPaths.RankOverrideDir, AppPaths.RankAssetsDir], AppPaths.RankCacheDir, _http, LoggerFactory.CreateLogger<RankIconService>());
-        _icons.SetUseDownloads(_settings.DownloadRankIcons);
-
         BuildOverlay();
-        if (_settings.DownloadRankIcons)
-        {
-            _icons.PrefetchOfficialIcons();
-        }
-
         StartDataSource();
         CreateTray();
         StartNotices();
@@ -145,7 +131,7 @@ public partial class App : Application
         if (!_settings.FirstRunCompleted && !_args.Demo)
         {
             _tray!.Notify($"{AppInfo.Name} is running",
-                $"It lives here in the notification area. In a match, {_settings.ToggleHotkey} shows or hides the panel and {_settings.CycleHotkey} switches playlists. Double-click the icon for settings.");
+                $"It lives here in the notification area. When you load into a match every player's tracker.gg row appears; {_settings.ToggleHotkey} shows or hides it and {_settings.CycleHotkey} switches playlists. Double-click the icon for settings.");
             _settings.FirstRunCompleted = true;
             _store.Save(_settings);
         }
@@ -168,23 +154,13 @@ public partial class App : Application
         }
     }
 
-    /// <summary>
-    /// <c>--screenshots</c>: renders the panel states off-screen and quits. With <c>--official-icons</c> the official
-    /// rank icons are downloaded to the cache first (awaited here, so the UI thread stays free to receive them).
-    /// </summary>
+    /// <summary><c>--screenshots</c>: renders the settings window and setup off-screen and quits.</summary>
     private async Task RenderScreenshotsAsync(string directory)
     {
         try
         {
-            RankIconService? icons = null;
-            if (_args.OfficialIcons)
-            {
-                _http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-                icons = new RankIconService([], AppPaths.RankCacheDir, _http, LoggerFactory.CreateLogger<RankIconService>());
-                await icons.EnsureOfficialIconsAsync(TimeSpan.FromSeconds(60));
-            }
-
-            foreach (var file in ScreenshotRenderer.RenderAll(directory, LoggerFactory, icons))
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            foreach (var file in ScreenshotRenderer.RenderAll(directory))
             {
                 _log.LogInformation("Screenshot written: {File}", file);
             }
@@ -241,63 +217,25 @@ public partial class App : Application
         }), null, Timeout.Infinite, executeOnlyOnce: true);
     }
 
-    /// <summary>The provider the settings (or the launch flags) ask for: Mock, RocketLeagueApi or TrackerGg.</summary>
-    private string EffectiveProvider =>
-        _args.Demo || _args.MockProvider ? ProviderNames.Mock : _settings.Provider;
-
-    /// <summary>Counts paid Rocket League API requests per month; one instance so the count survives provider changes.</summary>
-    internal LookupBudget LookupBudget =>
-        _lookupBudget ??= new LookupBudget(AppPaths.LookupUsageFile, () => _settings.MaxLookupsPerMonth);
-
-    private IPlayerStatsProvider CreateInnerProvider(string provider) => provider switch
-    {
-        ProviderNames.Mock => new MockStatsProvider(),
-        ProviderNames.RocketLeagueApi => new RocketLeagueApiProvider(
-            _http!,
-            () => ApiKeyProtector.Unprotect(_settings.ProtectedRocketLeagueApiKey),
-            LookupBudget,
-            LoggerFactory.CreateLogger<RocketLeagueApiProvider>()),
-        _ => new TrackerGgProvider(_http!, () => ApiKeyProtector.Unprotect(_settings.ProtectedApiKey), LoggerFactory.CreateLogger<TrackerGgProvider>()),
-    };
-
-    private CachingStatsProvider CreateProvider()
-    {
-        var provider = EffectiveProvider;
-        var options = new CachingOptions
-        {
-            Ttl = TimeSpan.FromMinutes(_settings.CacheTtlMinutes),
-            RequestsPerMinute = _settings.RequestsPerMinute,
-            // Mock data is not worth caching on disk (and the demo should show the loading state every time).
-            // Each real source keeps its own disk cache so switching never shows one source's numbers as another's.
-            DiskDirectory = provider switch
-            {
-                ProviderNames.Mock => null,
-                ProviderNames.RocketLeagueApi => Path.Combine(AppPaths.ProfileCacheDir, "rocket-league-api"),
-                _ => AppPaths.ProfileCacheDir,
-            },
-        };
-        _log.LogInformation("Stats provider: {Provider}", provider);
-        return new CachingStatsProvider(CreateInnerProvider(provider), options, TimeProvider.System, LoggerFactory.CreateLogger<CachingStatsProvider>());
-    }
-
     private void BuildOverlay()
     {
-        _provider = CreateProvider();
-        _panel = new PanelViewModel(_icons!);
-        _icons!.IconUpdated += tier => _panel.OnIconUpdated(tier);
+        _panel = new PanelViewModel();
 
         _tracker = new GameWindowTracker(LoggerFactory.CreateLogger<GameWindowTracker>());
+        _links = new LinkOpener(_args.DryRunLinks, LoggerFactory.CreateLogger<LinkOpener>());
         _window = new OverlayWindow();
-        var panelView = new PanelView { DataContext = _panel };
-        _window.Panel = panelView;
+        _panelView = new TrackerPanelView(url => _links.Open(url), LoggerFactory.CreateLogger<TrackerPanelView>()) { DataContext = _panel };
+        _panelView.SetZoom(_settings.Scale);
+        _window.Panel = _panelView;
         _window.Strip = new PlaylistStripView { DataContext = _panel.Strip };
         _window.EnsureHandle();
         _window.Configure(() => _tracker.FindGameWindow(), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
 
-        _links = new LinkOpener(_args.DryRunLinks, LoggerFactory.CreateLogger<LinkOpener>());
-        _coordinator = new OverlayCoordinator(_settings, _provider, _panel, _window, _links, LoggerFactory.CreateLogger<OverlayCoordinator>());
-        panelView.ProfileRequested += _coordinator.OpenProfile;
-        WireTrackerWindow();
+        _coordinator = new OverlayCoordinator(_settings, _panel, _window, LoggerFactory.CreateLogger<OverlayCoordinator>())
+        {
+            SampleLobby = _args.Demo,
+        };
+        _panel.IsSample = _args.Demo;
 
         _hotkeys = new HotkeyManager(_window.Source!, LoggerFactory.CreateLogger<HotkeyManager>());
         ApplyHotkeyBindings();
@@ -310,9 +248,6 @@ public partial class App : Application
                     break;
                 case OverlayHotkey.CyclePlaylist:
                     _coordinator.CyclePlaylist();
-                    break;
-                case OverlayHotkey.TrackerLobby:
-                    ToggleTrackerWindow();
                     break;
             }
         };
@@ -327,16 +262,14 @@ public partial class App : Application
     {
         HotkeyGesture.TryParse(_settings.ToggleHotkey, out var toggle);
         HotkeyGesture.TryParse(_settings.CycleHotkey, out var cycle);
-        HotkeyGesture.TryParse(_settings.TrackerHotkey, out var tracker);
-        _hotkeys!.SetBindings(toggle, cycle, tracker);
+        _hotkeys!.SetBindings(toggle, cycle);
     }
 
     /// <summary>
     /// Hotkeys only while Rocket League is in front (so Ctrl+R still reloads your browser), and the overlay hides while
     /// another window is in front of a running game. Neither applies when the game is not running at all (testing),
     /// with <c>--ungated-hotkeys</c> / <c>--demo</c>, or during the settings Preview (shown over the settings window).
-    /// Hotkeys pause while a new shortcut is being recorded. The tracker.gg lobby window counts as the game here, so
-    /// its shortcuts (and Ctrl+G) keep working after clicking it.
+    /// Hotkeys pause while a new shortcut is being recorded.
     /// </summary>
     private void UpdateForegroundGate()
     {
@@ -345,7 +278,7 @@ public partial class App : Application
             return;
         }
 
-        var foreground = _tracker.IsGameForeground || TrackerWindowInFront;
+        var foreground = _tracker.IsGameForeground;
         var previewing = _coordinator?.IsPreviewing == true;
         _hotkeys.SetActive(!_hotkeysSuspended && (foreground || HotkeysUngated));
         _window.SetSuppressed(!previewing && !HotkeysUngated && !foreground && _tracker.IsGameRunning);
@@ -402,7 +335,7 @@ public partial class App : Application
         if (announce && _settings.NotifyWhenGameStarts)
         {
             _tray?.Notify($"{AppInfo.Name} is on",
-                $"Rocket League is running. The panel appears when you load into a match; {_settings.ToggleHotkey} shows or hides it.");
+                $"Rocket League is running. Every player's tracker.gg row appears when you load into a match; {_settings.ToggleHotkey} shows or hides it.");
         }
     }
 
@@ -493,18 +426,12 @@ public partial class App : Application
     {
         _tray = new TrayIconService();
         _tray.TogglePanelRequested += () => _coordinator?.TogglePanel();
-        _tray.TrackerLobbyRequested += ToggleTrackerWindow;
         _tray.SettingsRequested += OpenSettings;
         _tray.EnableStatsApiRequested += OpenSettings; // the Game connection section is at the top
         _tray.OpenLogsRequested += () => OpenFolder(AppPaths.LogsDir);
         _tray.QuitRequested += () => Shutdown();
-        _tray.MenuOpening += () =>
-        {
-            _tray.SetToggleLabel(_window?.PanelOn == true, _settings.ToggleHotkey);
-            _tray.SetTrackerLabel(_trackerWindow?.IsVisible == true, _settings.TrackerHotkey);
-        };
+        _tray.MenuOpening += () => _tray.SetToggleLabel(_window?.PanelOn == true, _settings.ToggleHotkey);
         _tray.SetToggleLabel(false, _settings.ToggleHotkey);
-        _tray.SetTrackerLabel(false, _settings.TrackerHotkey);
         UpdateTrayStatus();
         _tray.Show();
     }
@@ -591,16 +518,13 @@ public partial class App : Application
         _shutdown.Cancel();
         _noticeTimer?.Stop();
         _settingsWindow?.Close();
-        _trackerWindow?.CloseForGood();
         StopPreviewFeed();
         _feed?.Dispose();
         _hotkeys?.Dispose();
         _tracker?.Dispose();
         _coordinator?.Dispose();
-        _provider?.Dispose();
-        (_previewProvider as IDisposable)?.Dispose();
-        _http?.Dispose();
         _tray?.Dispose();
+        _panelView?.Dispose();
         _window?.Close();
         _showSettingsWait?.Unregister(null);
         _showSettingsSignal?.Dispose();

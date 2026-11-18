@@ -85,8 +85,11 @@ public sealed record UninstallResult(bool ExeRemovalScheduled, string? LeftBehin
 public sealed class Installer(InstallLocations locations, ILogger<Installer>? logger = null)
 {
     private const string LicenceResource = "RLOverlay.Licenses.Inter-OFL.txt";
-    private const string RankReadmeResource = "RLOverlay.Assets.Ranks.README.md";
 
+    /// <summary>
+    /// Files setup writes. The second (the rank icon README) came with versions that drew their own panel; setup and
+    /// uninstall still remove it from older installs.
+    /// </summary>
     private static readonly string[] OwnFiles = [Path.Combine("licenses", "Inter-OFL.txt"), Path.Combine("assets", "ranks", "README.md")];
     private static readonly string[] OwnDirs = [Path.Combine("assets", "ranks"), "assets", "licenses"];
 
@@ -119,7 +122,7 @@ public sealed class Installer(InstallLocations locations, ILogger<Installer>? lo
         return string.Equals(Path.GetFileName(full), AppInfo.Name, StringComparison.OrdinalIgnoreCase) ? full : Path.Combine(full, AppInfo.Name);
     }
 
-    /// <summary>Copies the exe and its two text files, then shortcuts, the Apps &amp; features entry and the Run value.</summary>
+    /// <summary>Copies the exe and its licence file, then shortcuts, the Apps &amp; features entry and the Run value.</summary>
     /// <returns>The installed exe.</returns>
     public string Install(string sourceExe, InstallOptions options)
     {
@@ -142,7 +145,9 @@ public sealed class Installer(InstallLocations locations, ILogger<Installer>? lo
         }
 
         WriteResource(LicenceResource, Path.Combine(dir, OwnFiles[0]));
-        WriteResource(RankReadmeResource, Path.Combine(dir, OwnFiles[1]));
+        TryDelete(Path.Combine(dir, OwnFiles[1]));
+        TryDeleteEmptyDir(Path.Combine(dir, OwnDirs[0]));
+        TryDeleteEmptyDir(Path.Combine(dir, OwnDirs[1]));
 
         ShellLink.Create(locations.StartMenuShortcut, exe, dir, AppInfo.Name);
         if (options.DesktopShortcut)

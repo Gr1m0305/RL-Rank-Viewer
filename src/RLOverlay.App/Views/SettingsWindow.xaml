@@ -50,7 +50,7 @@
                     </Border>
                     <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="Gr1m's RL Overlay" FontSize="19" FontWeight="SemiBold" />
-                        <TextBlock Text="Settings · changes apply when you press Save. Preview shows the panel on screen with test data."
+                        <TextBlock Text="Settings · changes apply when you press Save. Preview shows the lobby screen with made-up players."
                                    Style="{StaticResource Hint}" Margin="0,2,0,0" />
                     </StackPanel>
                 </DockPanel>
@@ -107,77 +107,28 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Player stats -->
-                <TextBlock Text="PLAYER STATS" Style="{StaticResource SectionHeader}" />
+                <!-- Stats next to each rank (crops of each player's tracker.gg page) -->
+                <TextBlock Text="STATS NEXT TO EACH RANK" Style="{StaticResource SectionHeader}" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <RadioButton Content="Rocket League API on RapidAPI (live MMR and peak)" GroupName="Provider" Style="{StaticResource Radio}"
-                                     IsChecked="{Binding UseRocketLeagueApi}" />
-                        <StackPanel Margin="28,10,0,0" IsEnabled="{Binding UseRocketLeagueApi}">
-                            <DockPanel>
-                                <Button DockPanel.Dock="Right" Content="Remove key" Style="{StaticResource LinkButton}" Command="{Binding RemoveRlApiKeyCommand}"
-                                        VerticalAlignment="Center" Margin="14,0,0,0"
-                                        Visibility="{Binding HasStoredRlApiKey, Converter={StaticResource BoolToVisibility}}" />
-                                <PasswordBox x:Name="RlApiKeyBox" Style="{StaticResource SecretField}" AutomationProperties.Name="Rocket League API key" PasswordChanged="OnRlApiKeyChanged" />
-                            </DockPanel>
-                            <TextBlock Text="{Binding RlApiKeyStatus}" Style="{StaticResource Hint}" Margin="0,6,0,0" />
-                            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
-                                       Text="Current rank, MMR and peak MMR for everyone in the lobby. A third-party service (not Psyonix or tracker.gg) that gets each player's name and platform. Free plan: 10 lookups a day." />
-                            <Button Content="Get a key at rapidapi.com" Style="{StaticResource LinkButton}" Command="{Binding GetRlApiKeyCommand}"
-                                    HorizontalAlignment="Left" Margin="0,6,0,0" />
-                            <DockPanel Margin="0,12,0,0">
-                                <TextBox DockPanel.Dock="Right" Width="100" Style="{StaticResource Field}" VerticalAlignment="Center"
-                                         AutomationProperties.Name="Lookups per month"
-                                         Text="{Binding MaxLookupsPerMonth, UpdateSourceTrigger=PropertyChanged}" />
-                                <StackPanel>
-                                    <TextBlock Text="Lookups per month (at most)" Style="{StaticResource Label}" />
-                                    <TextBlock Text="{Binding LookupUsage}" Style="{StaticResource Hint}" />
-                                    <TextBlock Text="Paid plans charge for lookups over their allowance. 0 = no limit." Style="{StaticResource Hint}" />
-                                </StackPanel>
-                            </DockPanel>
-                        </StackPanel>
-                        <RadioButton Content="tracker.gg API (your own key)" GroupName="Provider" Style="{StaticResource Radio}"
-                                     IsChecked="{Binding UseTrackerGg}" Margin="0,14,0,0" />
-                        <StackPanel Margin="28,10,0,0" IsEnabled="{Binding UseTrackerGg}">
-                            <DockPanel>
-                                <Button DockPanel.Dock="Right" Content="Remove key" Style="{StaticResource LinkButton}" Command="{Binding RemoveKeyCommand}"
-                                        VerticalAlignment="Center" Margin="14,0,0,0"
-                                        Visibility="{Binding HasStoredKey, Converter={StaticResource BoolToVisibility}}" />
-                                <PasswordBox x:Name="ApiKeyBox" Style="{StaticResource SecretField}" AutomationProperties.Name="tracker.gg API key" PasswordChanged="OnApiKeyChanged" />
-                            </DockPanel>
-                            <TextBlock Text="{Binding KeyStatus}" Style="{StaticResource Hint}" Margin="0,6,0,0" />
-                            <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0">
-                                <Run Text="Tracker Network's public API may not offer Rocket League; without access, rows show “No data”." />
-                            </TextBlock>
-                            <Button Content="Get a key at tracker.gg/developers" Style="{StaticResource LinkButton}" Command="{Binding GetApiKeyCommand}"
-                                    HorizontalAlignment="Left" Margin="0,6,0,0" />
-                        </StackPanel>
-                        <RadioButton Content="Test data (no account needed)" GroupName="Provider" Style="{StaticResource Radio}"
-                                     IsChecked="{Binding UseMockData}" Margin="0,14,0,0" />
-                        <Border Style="{StaticResource Divider}" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="10" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="Keep looked-up players for (minutes)" Style="{StaticResource Label}" />
-                                <TextBlock Text="Meeting the same players again within this time reuses their numbers instead of another lookup, so their MMR can be up to this old." Style="{StaticResource Hint}" />
-                            </StackPanel>
-                            <TextBox Grid.Column="1" Width="100" Style="{StaticResource Field}" VerticalAlignment="Center"
-                                     Text="{Binding CacheTtlMinutes, UpdateSourceTrigger=PropertyChanged}" />
-                            <StackPanel Grid.Row="2">
-                                <TextBlock Text="Lookups per minute (at most)" Style="{StaticResource Label}" />
-                                <TextBlock Text="Stays under the API's rate limit." Style="{StaticResource Hint}" />
-                            </StackPanel>
-                            <TextBox Grid.Row="2" Grid.Column="1" Width="100" Style="{StaticResource Field}" VerticalAlignment="Center"
-                                     Text="{Binding RequestsPerMinute, UpdateSourceTrigger=PropertyChanged}" />
-                        </Grid>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,0,0,10"
+                                   Text="When you load into a match, the overlay shows every player's row from tracker.gg for the selected playlist: rank, rating and division up/down. Each stat you tick is cut from the same page and shown next to it." />
+                        <ItemsControl ItemsSource="{Binding Columns}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ColumnOption}">
+                                    <CheckBox Content="{Binding Label}" IsChecked="{Binding IsOn}" Style="{StaticResource Chip}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
+                                   Text="Wins, Goals, Shots, Assists, Saves and MVPs are the player's lifetime totals; Peak MMR and Streak are for the selected playlist. Every stat makes the rows wider." />
+                        <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
+                                   Text="The pages load in a built-in Microsoft Edge view, straight from tracker.gg. No account or key is needed." />
                     </StackPanel>
                 </Border>
 
@@ -223,35 +174,15 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Columns -->
-                <TextBlock Text="COLUMNS" Style="{StaticResource SectionHeader}" />
-                <Border Style="{StaticResource Card}">
-                    <StackPanel>
-                        <TextBlock Text="Stats shown after MMR (the panel gets narrower when you turn some off)." Style="{StaticResource Hint}" Margin="0,0,0,10" />
-                        <ItemsControl ItemsSource="{Binding Columns}" Focusable="False">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:ColumnOption}">
-                                    <CheckBox Content="{Binding Label}" IsChecked="{Binding IsOn}" Style="{StaticResource Chip}" />
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
-
                 <!-- Hotkeys -->
                 <TextBlock Text="SHORTCUTS" Style="{StaticResource SectionHeader}" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <DockPanel>
-                            <Button x:Name="ToggleKeyField" DockPanel.Dock="Right" Style="{StaticResource KeyField}" AutomationProperties.Name="Show or hide the panel shortcut"
+                            <Button x:Name="ToggleKeyField" DockPanel.Dock="Right" Style="{StaticResource KeyField}" AutomationProperties.Name="Show or hide the lobby shortcut"
                                     Click="OnShortcutClicked" PreviewKeyDown="OnShortcutKeyDown" LostKeyboardFocus="OnShortcutLostFocus"
                                     Content="{Binding ToggleHotkey}" ContentTemplate="{StaticResource ShortcutContent}" />
-                            <TextBlock Text="Show / hide the panel" Style="{StaticResource Label}" />
+                            <TextBlock Text="Show / hide the lobby" Style="{StaticResource Label}" />
                         </DockPanel>
                         <DockPanel Margin="0,10,0,0">
                             <Button x:Name="CycleKeyField" DockPanel.Dock="Right" Style="{StaticResource KeyField}" AutomationProperties.Name="Next playlist shortcut"
@@ -259,14 +190,8 @@
                                     Content="{Binding CycleHotkey}" ContentTemplate="{StaticResource ShortcutContent}" />
                             <TextBlock Text="Next playlist" Style="{StaticResource Label}" />
                         </DockPanel>
-                        <DockPanel Margin="0,10,0,0">
-                            <Button x:Name="TrackerKeyField" DockPanel.Dock="Right" Style="{StaticResource KeyField}" AutomationProperties.Name="Lobby on tracker.gg shortcut"
-                                    Click="OnShortcutClicked" PreviewKeyDown="OnShortcutKeyDown" LostKeyboardFocus="OnShortcutLostFocus"
-                                    Content="{Binding TrackerHotkey}" ContentTemplate="{StaticResource ShortcutContent}" />
-                            <TextBlock Text="Lobby on tracker.gg" Style="{StaticResource Label}" />
-                        </DockPanel>
                         <TextBlock x:Name="ShortcutHint" Style="{StaticResource Hint}" Margin="0,10,0,0"
-                                   Text="Click a shortcut, then press the new keys (Ctrl, Alt, Shift or Win plus a key). They only work while Rocket League or the tracker.gg lobby window is in front." />
+                                   Text="Click a shortcut, then press the new keys (Ctrl, Alt, Shift or Win plus a key). They only work while Rocket League is in front." />
                     </StackPanel>
                 </Border>
 
@@ -311,27 +236,6 @@
                     </Grid>
                 </Border>
 
-                <!-- Rank icons -->
-                <TextBlock Text="RANK ICONS" Style="{StaticResource SectionHeader}" />
-                <Border Style="{StaticResource Card}">
-                    <StackPanel>
-                        <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding DownloadRankIcons}">
-                            <StackPanel>
-                                <TextBlock Text="Download the official rank icons" FontSize="13.5" />
-                                <TextBlock Text="Fetched once from Tracker Network's image server and kept on this PC. Off: simple built-in icons."
-                                           Style="{StaticResource Hint}" />
-                            </StackPanel>
-                        </CheckBox>
-                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                            <Button Content="Open my icons folder" Style="{StaticResource SecondaryButton}" Command="{Binding OpenIconsFolderCommand}" />
-                            <Button Content="Download again" Style="{StaticResource LinkButton}" Command="{Binding RedownloadIconsCommand}"
-                                    VerticalAlignment="Center" Margin="16,0,0,0" />
-                        </StackPanel>
-                        <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
-                                   Text="Icons you put in that folder (bronze_1.png … supersonic_legend.png) replace the downloaded ones." />
-                    </StackPanel>
-                </Border>
-
                 <!-- General -->
                 <TextBlock Text="GENERAL" Style="{StaticResource SectionHeader}" />
                 <Border Style="{StaticResource Card}">
@@ -360,7 +264,7 @@
         <Border Grid.Row="1" Background="#0AFFFFFF" BorderBrush="{StaticResource CardBorder}" BorderThickness="0,1,0,0" Padding="24,12">
             <DockPanel>
                 <Button x:Name="PreviewButton" DockPanel.Dock="Left" Style="{StaticResource SecondaryButton}" Command="{Binding TogglePreviewCommand}"
-                        AutomationProperties.Name="Preview" AutomationProperties.HelpText="Shows the panel on screen with test data">
+                        AutomationProperties.Name="Preview" AutomationProperties.HelpText="Shows the lobby screen with made-up players">
                     <StackPanel Orientation="Horizontal">
                         <Ellipse Width="8" Height="8" VerticalAlignment="Center" Margin="0,1,8,0">
                             <Ellipse.Style>

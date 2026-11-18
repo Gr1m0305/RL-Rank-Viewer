@@ -13,12 +13,6 @@ internal sealed class SampleSettingsHost : ISettingsHost
 
     public OverlaySettings Current { get; } = new();
 
-    public bool HasApiKey => false;
-
-    public bool HasRocketLeagueApiKey => true;
-
-    public int LookupsThisMonth => 412;
-
     public bool RunAtStartup => true;
 
     public string ConnectionStatus => "Connected to Rocket League (port 49123).";
@@ -35,7 +29,7 @@ internal sealed class SampleSettingsHost : ISettingsHost
     {
     }
 
-    public void Save(OverlaySettings settings, ApiKeyEdit trackerGgKey, ApiKeyEdit rocketLeagueApiKey, bool runAtStartup)
+    public void Save(OverlaySettings settings, bool runAtStartup)
     {
     }
 
@@ -54,14 +48,6 @@ internal sealed class SampleSettingsHost : ISettingsHost
         Task.FromResult(new StatsApiEnableOutcome(true, false, false, "The Stats API is already enabled. Nothing was changed.", []));
 
     public void OpenFolder(string path)
-    {
-    }
-
-    public void OpenUrl(string url)
-    {
-    }
-
-    public void ClearRankIconCache()
     {
     }
 }

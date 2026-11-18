@@ -1,26 +1,26 @@
 # Gr1m's RL Overlay
 
-A small companion overlay for Rocket League. When you load into a match, a compact glass panel appears just below
-the scoreboard with every player's rank icon, MMR and stats for the playlist you choose (2v2 by default). Rows fill
-in live as players join, the panel fades out at kickoff, and clicking a name opens that player's tracker profile.
-After the match the lobby stays available (`Ctrl+R`) so you can look up who you just played, until you load into the
-next match or close the game. `Ctrl+T` opens a window with every player's row from their tracker.gg profile for the
-same playlist. The app waits quietly in the tray and switches on by itself when Rocket League starts.
+A small companion overlay for Rocket League. When you load into a match, a glass panel appears just below the
+scoreboard with every player's row from **tracker.gg** for the playlist you choose (2v2 by default): rank,
+division, rating and how far to the next division, plus the stats you pick (**Wins**, **Streak** and **Peak MMR**
+by default). Rows appear as players join, Blue and Orange each get their own block, and the columns line up from
+player to player. The panel fades out at kickoff, and clicking a name opens that player's full tracker.gg profile.
+After the match the lobby stays available (`Ctrl+R`) so you can look up who you just played, until you load into
+the next match or close the game. The app waits quietly in the tray and switches on by itself when Rocket League
+starts. No account or API key is needed.
 
-![The panel in a 2v2 lobby](docs/screenshots/01_main_2v2.png)
+![The lobby screen (preview with made-up players)](docs/screenshots/01_screen_layout.png)
 
-*Screenshots use the app's built-in placeholder icons so the repository holds no Psyonix artwork; the running app
-shows the official in-game rank icons.*
+*This is the settings Preview with made-up players. In a match each grey band is that player's row cut from their
+tracker.gg page. The repository holds no screenshots of tracker.gg pages because they contain Psyonix's rank art.*
 
 | Key | Does |
 |---|---|
-| `Ctrl+R` | Show / hide the panel (works during the match too, where the next kickoff hides it again, and after the match) |
-| `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Tournaments, Casual. The strip shows for 1.5 s |
-| `Ctrl+T` | Opens or closes the [tracker.gg lobby window](#the-trackergg-lobby-window-ctrlt) |
-| Click a name | Opens that player's tracker profile in your browser |
+| `Ctrl+R` | Show / hide the lobby (works during the match too, where the next kickoff hides it again, and after the match) |
+| `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Tournaments, Casual. Every row moves at once, without reloading |
+| Click a name | Opens that player's tracker.gg profile in your browser |
 
-The shortcuts can be changed in Settings and only work while Rocket League (or the tracker.gg lobby window) is the
-window in front.
+The shortcuts can be changed in Settings and only work while Rocket League is the window in front.
 
 ## How it stays safe with Easy Anti-Cheat
 
@@ -28,45 +28,42 @@ Rocket League uses Easy Anti-Cheat. This app is a completely separate process:
 
 * It **never** injects into, reads memory from, hooks or opens a handle to the game process.
 * Its only game data comes from Rocket League's **official Stats API**: a local socket the game itself opens on
-  `127.0.0.1:49123` when it is enabled in the game's ini file. The only other contact with the game is editing that
-  ini file, when you ask it to, with a backup first.
+  `127.0.0.1:49123` when it is enabled in the game's ini file. That gives the player names, platforms and teams. The
+  only other contact with the game is editing that ini file, when you ask it to, with a backup first.
 * It draws its own transparent, always-on-top window. That is why Rocket League must run in **Borderless** or
   **Windowed** mode: exclusive fullscreen hides every other window.
 
-## Where player ranks come from: read this
+## Where the ranks come from
 
-Psyonix has no public rank API and Tracker Network doesn't give out Rocket League access, so live ranks come from a
-third-party service you subscribe to yourself. Settings → *Player stats* offers three sources:
+Each player's row is **tracker.gg's own page**, shown in a small built-in Microsoft Edge browser (WebView2), one per
+player, exactly as if you opened their profile in a tab. The app then hides the rest of the page and shows only:
 
-* **Rocket League API on RapidAPI** (the default, `RocketLeagueApiProvider`): every player's current rank, division,
-  MMR and **peak MMR** in each playlist, looked up by platform and name (Steam: SteamID64 first, then the name). It is
-  run by an independent developer (TonyKun7), not by Psyonix or Tracker Network, and doesn't say where its data
-  comes from. It receives the name and platform of every player the app looks up. To set it up:
-  1. Sign in at [rapidapi.com](https://rapidapi.com/TonyKun7/api/rocket-league10/pricing) and subscribe to a plan.
-     *Basic* is free with 10 lookups a day (about two 2v2 lobbies); *Pro* is $9.99 a month for 2,000 lookups, then
-     $0.01 each (prices when this was written).
-  2. Copy your RapidAPI key (the `X-RapidAPI-Key` value on the API's page) into Settings → *Player stats* and press
-     **Save**. It is stored encrypted for your Windows account.
+* the table row for the selected playlist (rank icon, rank and division, rating, the up/down to the next division),
+  plus the *Peak Rating* and *Streak* cells if they are ticked, without the ⋮ menu;
+* the stat tiles you ticked (*Wins*, *Goals*, *Shots*, *Assists*, *Saves*, *MVPs*), copied from the same page.
 
-  Each new player in a lobby, you included, costs one lookup (a Steam player whose ID isn't found costs two).
-  Players you meet again within *Keep looked-up players for* (10 minutes by default) cost nothing. *Lookups per
-  month* (2,000 by default) stops lookups before a paid plan starts charging overage; 0 turns the cap off.
-* **tracker.gg API** (`TrackerGgProvider`) with your own Tracker Network key. Their developer portal is down and
-  Rocket League isn't offered to public keys, so this most likely shows *No data*; it stays in case that changes.
-  The app never scrapes the tracker.gg website.
-* **Free, without an API: the tracker.gg lobby window** (`Ctrl+T`, below). It shows each player's row from
-  tracker.gg's own page in a separate window. The app doesn't read those numbers, so they don't fill the panel.
-* **Test data** (`MockStatsProvider`): made-up numbers, no account. The `--demo` flag and the *Preview* button use
-  it too.
+The app finds the row and tiles by their names and measures their size so every player's columns line up. It never
+reads the numbers, so nothing is stored, cached or sent anywhere else.
 
-Names, platforms and teams always come from the game, and clicking a name opens the player's tracker.gg profile.
+* Pages start loading as soon as a player joins, so they are usually ready by the time you look. A shimmer marks
+  rows still loading; ↻ under a name loads that page again. At the next match, pages older than a minute reload.
+* *No Hoops rating on tracker.gg* (for example): that player has no row for that playlist. *Not found on
+  tracker.gg*: there is no profile under that name. Bots and split-screen guests have no profile.
+* If a player's page has no cell that others have (a new player without a peak, say), their row leaves a gap there so
+  the columns still line up.
+* If a row hasn't appeared after 12 s, that line shows tracker.gg's whole page (smaller) so you can see what is
+  there instead, for example a browser check. When the row loads, the line goes back to normal. The app never
+  answers such checks itself.
+* Steam players are found by their SteamID64. Epic, PlayStation, Xbox and Switch players are found by the name the
+  game shows, which may not be the name on their tracker.gg profile.
+* tracker.gg gets what a normal visit sends: the profile addresses (so the player names) and its own cookies, kept
+  in `%LOCALAPPDATA%\RLOverlay\webview`. Its ads still load, hidden and muted.
 
 ## Requirements
 
 * Windows 10 (version 1809 or later) or 11, 64-bit, and Rocket League (Steam or Epic) in **Borderless** or
   **Windowed** mode.
-* For the tracker.gg lobby window: the Microsoft Edge WebView2 Runtime (part of Windows 11 and already installed on
-  almost every Windows 10 PC).
+* The Microsoft Edge WebView2 Runtime (part of Windows 11 and already installed on almost every Windows 10 PC).
 * The published exe is self-contained: no .NET install needed.
 * To build from source: .NET SDK 8 or newer (the projects target .NET 8).
 
@@ -92,7 +89,7 @@ offers:
 Running the setup again updates the installed copy (it closes the running one first). To remove it: *Settings →
 Apps → Gr1m's RL Overlay → Uninstall*. Your settings are kept unless you tick the box to delete them.
 
-`publish/RLOverlay.exe` is the same program without installing: run it from any folder. Both files are about 68 MB
+`publish/RLOverlay.exe` is the same program without installing: run it from any folder. Both files are about 70 MB
 and need no .NET install. They are not code-signed, so Windows SmartScreen may warn the first time; choose
 *More info → Run anyway* if you built them yourself.
 
@@ -117,8 +114,8 @@ and need no .NET install. They are not code-signed, so Windows SmartScreen may w
 
 3. **Set the game to Borderless.** Rocket League → Settings → Video → *Display Mode* → **Borderless** (or Windowed).
    In exclusive fullscreen the overlay can't be drawn on top; the app tells you once if it sees that.
-4. **Choose the stats source.** Settings → *Player stats*: paste your RapidAPI key for the Rocket League API (see
-   "Where player ranks come from" above), or pick *Test data* to see made-up numbers.
+4. **Pick the stats** (optional). Settings → *Stats next to each rank*: Wins, Streak and Peak MMR are ticked; add
+   Goals, Shots, Assists, Saves or MVPs, or untick any. Every stat makes the rows wider.
 5. *Start with Windows* (Settings → *General*) is on if you kept the setup default. Press **Save** after changes.
 
 Settings → *Game connection* shows a green dot and "Connected to Rocket League" once the game is running with the
@@ -126,65 +123,37 @@ Stats API on.
 
 ## In a match
 
-* Load into any match: the panel slides in below the scoreboard and fills in row by row as players arrive (a
-  shimmer marks rows still loading).
-* `Ctrl+G` switches every row to another playlist's rank and MMR (no new lookups). Casual shows casual MMR with the
-  unranked icon. *Follow the match's playlist* (on by default) starts on the playlist you're actually playing.
-* Clicking a name opens the profile in your browser. While the browser is in front the overlay hides; alt-tab back
-  to the game and it returns.
-* At kickoff the panel fades out. `Ctrl+R` brings it back mid-match; the next kickoff hides it again.
+* Load into any match: the lobby slides in below the scoreboard and fills in as players arrive.
+* `Ctrl+G` moves every row to another playlist's row on the same pages (no reload). *Follow the match's playlist*
+  (on by default) starts on the playlist you're actually playing.
+* Clicking a name opens the full profile in your browser. While the browser is in front the overlay hides; alt-tab
+  back to the game and it returns.
+* At kickoff the lobby fades out. `Ctrl+R` brings it back mid-match; the next kickoff hides it again.
 * **After the match** the lobby is kept: press `Ctrl+R` on the podium or back in the menus to see everyone you just
   played with and click their names. It is replaced when you load into the next match and cleared when you close
   the game.
 
-![After the match](docs/screenshots/10_after_match.png)
-
-## The tracker.gg lobby window (`Ctrl+T`)
-
-A free way to see everyone's current tracker.gg rating, no API key needed. `Ctrl+T` (or tray → *Lobby on
-tracker.gg*) opens a window at the right of the screen with one line per player in the lobby, Blue team first. Each
-line is that player's row from their own tracker.gg profile for the playlist selected in the overlay (rank,
-division, rating, peak, matches, streak, exactly as tracker.gg shows it), at its real size with nothing around it.
-`Ctrl+G` moves every line to another playlist at once.
-
-*(No screenshot here: it would be tracker.gg's page with Psyonix's rank art, which this repository doesn't hold.)*
-
-How it works: when the window opens, each player's profile page loads in an embedded Microsoft Edge (WebView2)
-browser, just like opening it in a tab. The window then hides the rest of the page and shows only a copy of the
-playlist table's row for the selected playlist, without its ⋮ menu. The app only looks for the row's name; it never
-reads the numbers.
-
-* Pages load only while the window is open and stay loaded while it's hidden, so reopening it is instant. Pages
-  older than 10 minutes load again when you reopen the window; ↻ next to a name reloads that player's page.
-* When players join or leave the line list follows; a player who changes team moves without reloading.
-* *No Hoops rating on tracker.gg* (for example): that player has no row for that playlist. *Not found on
-  tracker.gg*: there is no profile under that name. Bots and split-screen guests have no profile.
-* If a row hasn't appeared after 12 s, its line shows tracker.gg's whole page (smaller) so you can see what is
-  there instead, for example a browser check. When the row loads, the line goes back to normal. The app never
-  answers such checks itself.
-* Clicking a name opens the full profile in your browser. The window stays on top and doesn't take focus from the
-  game when it opens; `Ctrl+T` or Esc hides it. While it is the window in front, the overlay's shortcuts still work.
-* Steam players are found by their SteamID64. Epic, PlayStation, Xbox and Switch players are found by the name the
-  game shows, which may not be the name on their tracker.gg profile.
-* tracker.gg gets what a normal visit sends: the profile addresses (so the player names) and its own cookies, kept
-  in `%LOCALAPPDATA%\RLOverlay\webview`. Its ads still load, hidden and muted.
-
 **Standby:** while Rocket League is closed the app does nothing but wait (tray tooltip: *standby*). When the game
 starts it switches on and shows a short notice (turn that off in Settings → *General*); when the game closes it goes
-back to standby.
+back to standby and closes the pages.
 
 ## Settings and tray
 
-Right-click the tray icon for *Show/Hide panel*, *Lobby on tracker.gg*, **Settings…**, *Enable Stats API…*, *Open logs folder* and *Quit*;
+Right-click the tray icon for *Show/Hide lobby*, **Settings…**, *Enable Stats API…*, *Open logs folder* and *Quit*;
 double-click opens Settings. Starting the exe again while it runs also opens Settings in the running copy.
 
 The settings window covers the game connection (Stats API status per ini file, *Enable Stats API…*, the port), the
-stats source, API keys and monthly lookup cap, which playlists `Ctrl+G` cycles through and the default, which columns to show, the three
-shortcuts (click a field and press the new combination), position and size, rank icon downloads, and *Start with
-Windows*. **Preview** shows the panel with a sample lobby while you adjust it; nothing is kept until you press
-**Save**.
+**stats next to each rank** (Wins, Streak, Peak MMR, Goals, Shots, Assists, Saves, MVPs), which playlists `Ctrl+G`
+cycles through and the default, the two shortcuts (click a field and press the new combination), position and size,
+and *Start with Windows*. **Preview** shows the lobby screen with made-up players while you adjust it; nothing is
+kept until you press **Save**.
 
 ![Settings](docs/screenshots/08_settings.png)
+
+**Updating from an earlier version:** the RapidAPI, tracker.gg-key and test-data sources, the `Ctrl+T` window and the
+rank icon downloads are gone; tracker.gg's rows are now the main screen. Your stat choice starts once at the new
+defaults (Wins, Streak, Peak MMR), old API keys are dropped the next time settings are saved, and everything else
+(shortcuts, playlists, position, size) is kept.
 
 ## Try it without the game
 
@@ -192,25 +161,26 @@ Windows*. **Preview** shows the panel with a sample lobby while you adjust it; n
 dotnet run --project src/RLOverlay.App -- --demo
 ```
 
-`--demo` plays a scripted lobby with test data (the published exe takes the same flag). To test the real connection
-path, run the fake Stats API server in one terminal and the overlay in another:
+`--demo` plays a scripted lobby of made-up players, with placeholders where tracker.gg's rows go (the published exe
+takes the same flag). To test the real path, run the fake Stats API server in one terminal and the overlay in
+another:
 
 ```bash
 dotnet run --project tools/FakeStatsServer -- tests/fixtures/scenarios/lobby_2v2.json --port 49200
 ```
 
 ```bash
-dotnet run --project src/RLOverlay.App -- --provider mock --port 49200 --always-connect --ungated-hotkeys --dry-run-links
+dotnet run --project src/RLOverlay.App -- --port 49200 --always-connect --ungated-hotkeys --dry-run-links
 ```
 
-(`--always-connect` skips standby, since Rocket League itself isn't running.) `Ctrl+T` opens the tracker.gg lobby
-window for the scenario's players; their names are made up, so most lines say *Not found* (or show whoever really
-uses that name).
+(`--always-connect` skips standby, since Rocket League itself isn't running.) The scenario's names are made up, so
+most rows say *Not found on tracker.gg* (or show whoever really uses that name); put real tracker.gg names in a copy
+of the scenario to see real rows.
 
-Players join over 5 s, the lobby waits about 30 s (try `Ctrl+G`, `Ctrl+R`), kickoff hides the panel at 33 s and the
-match is destroyed at 66 s (the lobby stays: `Ctrl+R` shows it). Type `kickoff`, `countdown`, `created`, `destroyed` or `quit` in the server window to
-send those events right away. `lobby_3v3.json` is a 3v3 lobby. All launch flags are listed in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#launch-flags).
+Players join over 5 s, the lobby waits about 30 s (try `Ctrl+G`, `Ctrl+R`), kickoff hides it at 33 s and the
+match is destroyed at 66 s (the lobby stays: `Ctrl+R` shows it). Type `kickoff`, `countdown`, `created`,
+`destroyed`, `ended` or `quit` in the server window to send those events right away. `lobby_3v3.json` is a 3v3
+lobby. All launch flags are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#launch-flags).
 
 ## Build and test
 
@@ -226,26 +196,25 @@ dotnet test RLOverlay.sln
 
 | Problem | Try |
 |---|---|
-| Panel never appears | Settings → *Game connection*: is the Stats API **On**? Restart the game after enabling it. Make sure the game is Borderless/Windowed. Check the logs (tray → *Open logs folder*). |
+| Lobby never appears | Settings → *Game connection*: is the Stats API **On**? Restart the game after enabling it. Make sure the game is Borderless/Windowed. Check the logs (tray → *Open logs folder*). |
 | "Waiting for the Stats API" while the game runs | The game was started before the ini was changed (restart it), or the port differs: leave *Stats API port* empty to read it from the ini. |
-| Rows say *No data* | The stats provider has nothing for that player (see "Where player ranks come from"). Use *Test data* to check the overlay itself. |
-| *No data* for everyone with the Rocket League API | Check the log (tray → *Open logs folder*): 401/403 or "not subscribed" = wrong key or no plan on RapidAPI; "allowance is used up" = your plan's requests for the day or month are spent; "Monthly lookup limit reached" = the app's own cap (Settings → *Lookups per month*). |
-| Shortcuts do nothing | They only work while Rocket League (or the tracker.gg lobby window) is in front. If another app already uses the combination, the log says so; pick another in Settings. |
-| tracker.gg lobby lines say *Needs the Microsoft Edge WebView2 Runtime* | Install the WebView2 Runtime from Microsoft, then reopen the window. |
-| A tracker.gg line shows the whole page | The playlist row didn't appear within 12 s: tracker.gg is slow, or shows a browser check or notice. Do what the page asks in that line; the row appears once the page has loaded. ↻ loads it again. |
-| Panel in the wrong place | Settings → *Position and size*, with **Preview** on to see it move. |
-| Placeholder icons instead of the real ones | The first start downloads them; check the internet connection, or Settings → *Rank icons* → *Download again*. |
+| Rows say *Needs the Microsoft Edge WebView2 Runtime* | Install the WebView2 Runtime from Microsoft, then restart the app. |
+| A row shows tracker.gg's whole page | The playlist row didn't appear within 12 s: tracker.gg is slow, or shows a browser check or notice. Do what the page asks in that row; the row appears once the page has loaded. ↻ loads it again. |
+| *Not found on tracker.gg* for someone you know is there | Console and Epic players are found by the name the game shows; if their tracker.gg profile uses another name, click their name and search on tracker.gg. |
+| A stat tile is missing for one player | Their tracker.gg page doesn't show that tile (yet). The others still line up. |
+| Shortcuts do nothing | They only work while Rocket League is in front. If another app already uses the combination, the log says so; pick another in Settings. |
+| Lobby in the wrong place or too wide | Settings → *Position and size* (with **Preview** on to see it move), or untick some stats. |
 
 ## Files
 
 | Path | Contents |
 |---|---|
-| `%LOCALAPPDATA%\RLOverlay\settings.json` | settings (API keys encrypted with Windows DPAPI for your account) |
+| `%LOCALAPPDATA%\RLOverlay\settings.json` | settings |
 | `%LOCALAPPDATA%\RLOverlay\logs\` | daily logs, 7 kept |
-| `%LOCALAPPDATA%\RLOverlay\cache\` | looked-up players and the downloaded rank icons |
-| `%LOCALAPPDATA%\RLOverlay\rocket-league-api-usage.json` | Rocket League API lookups made this month (for the cap) |
-| `%LOCALAPPDATA%\RLOverlay\ranks\` | your own rank icons, if you want to replace the downloaded ones |
-| `%LOCALAPPDATA%\RLOverlay\webview\` | the tracker.gg lobby window's browser data (tracker.gg cookies and cache) |
+| `%LOCALAPPDATA%\RLOverlay\webview\` | the built-in browser's data (tracker.gg cookies and cache) |
+
+Earlier versions also kept `cache\`, `ranks\` and `rocket-league-api-usage.json` there; they are no longer used and
+can be deleted.
 
 **Uninstall:** *Settings → Apps → Gr1m's RL Overlay → Uninstall* (tick the box to delete settings too). For the
 portable copy: turn off *Start with Windows*, quit from the tray, delete the exe and `%LOCALAPPDATA%\RLOverlay`.
@@ -260,9 +229,7 @@ Either way the ini backups stay next to the game's ini files and the Stats API s
 
 ## Licence notes
 
-Rank artwork belongs to Psyonix and is **not** included in the repository or the exe. On first start the app
-downloads the official in-game rank icons once (from Tracker Network's CDN, the images tracker.gg shows) into
-`%LOCALAPPDATA%\RLOverlay\cache\ranks\`. Until then, or if downloads are turned off, it draws simple built-in
-placeholders, which is also what the screenshots in `docs/screenshots` show. Your own icons win over the download
-(see [assets/ranks/README.md](assets/ranks/README.md)). The bundled Inter font is licensed under the SIL Open Font
+Rank artwork belongs to Psyonix and is **not** included in the repository or the exe. The only rank images the app
+ever shows are the ones on tracker.gg's own pages, inside the built-in browser while it runs. The screenshots in
+`docs/screenshots` use made-up players and placeholders. The bundled Inter font is licensed under the SIL Open Font
 License 1.1 (`licenses/Inter-OFL.txt`).

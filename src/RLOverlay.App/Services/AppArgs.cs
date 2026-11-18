@@ -5,11 +5,11 @@ namespace RLOverlay.App.Services;
 /// <summary>Command-line flags (see docs/ARCHITECTURE.md, "Launch flags").</summary>
 internal sealed record AppArgs
 {
-    /// <summary>Play a built-in lobby with mock stats; no game needed. Implies <see cref="UngatedHotkeys"/>.</summary>
+    /// <summary>
+    /// Play a built-in lobby of made-up players (placeholders where tracker.gg's rows go); no game needed. Implies
+    /// <see cref="UngatedHotkeys"/>.
+    /// </summary>
     public bool Demo { get; init; }
-
-    /// <summary>Force the mock stats provider (for testing against FakeStatsServer).</summary>
-    public bool MockProvider { get; init; }
 
     /// <summary>Stats API port override.</summary>
     public int? Port { get; init; }
@@ -20,14 +20,8 @@ internal sealed record AppArgs
     /// <summary>Log profile URLs instead of opening the browser.</summary>
     public bool DryRunLinks { get; init; }
 
-    /// <summary>Render the panel states to PNGs in this folder and exit.</summary>
+    /// <summary>Render the settings window and setup to PNGs in this folder and exit.</summary>
     public string? ScreenshotsDir { get; init; }
-
-    /// <summary>
-    /// With <see cref="ScreenshotsDir"/>: draw the official rank icons (downloaded to the cache) instead of the
-    /// placeholders. Off by default so the committed docs screenshots contain no rank artwork.
-    /// </summary>
-    public bool OfficialIcons { get; init; }
 
     /// <summary>Quit after this many seconds (automation).</summary>
     public double? ExitAfterSeconds { get; init; }
@@ -74,18 +68,6 @@ internal sealed record AppArgs
                 case "--demo":
                     result = result with { Demo = true };
                     break;
-                case "--provider":
-                    var name = Next();
-                    if (string.Equals(name, "mock", StringComparison.OrdinalIgnoreCase))
-                    {
-                        result = result with { MockProvider = true };
-                    }
-                    else
-                    {
-                        unknown.Add($"--provider {name}");
-                    }
-
-                    break;
                 case "--port":
                     if (int.TryParse(Next(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) && port is > 0 and <= 65535)
                     {
@@ -116,9 +98,6 @@ internal sealed record AppArgs
                     break;
                 case "--screenshots":
                     result = result with { ScreenshotsDir = Next() ?? "docs/screenshots" };
-                    break;
-                case "--official-icons":
-                    result = result with { OfficialIcons = true };
                     break;
                 case "--exit-after":
                     if (double.TryParse(Next(), NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds) && seconds > 0)
