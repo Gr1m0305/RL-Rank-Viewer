@@ -12,6 +12,12 @@ public sealed class LobbyStateMachine
     /// <summary>A player missing from this many consecutive UpdateState ticks is treated as gone.</summary>
     public const int MissedTicksBeforeRemoval = 3;
 
+    /// <summary>
+    /// A new game needs this many players before it replaces the lobby kept after a game. Freeplay, training and other
+    /// sessions with just the local player leave the kept lobby alone.
+    /// </summary>
+    public const int PlayersForNewGame = 2;
+
     private readonly Dictionary<string, Entry> _players = new(StringComparer.Ordinal);
     private long _joinSequence;
 
@@ -20,6 +26,10 @@ public sealed class LobbyStateMachine
 
     // The panel is open because the user pressed Ctrl+R (not auto-shown at load-in).
     private bool _openedManually;
+
+    // While a finished game's lobby is kept, the session after it is followed here, out of sight, until it has
+    // PlayersForNewGame players (then it becomes the lobby) or ends without them (freeplay, training: dropped).
+    private LobbyStateMachine? _next;
 
     public MatchPhase Phase { get; private set; } = MatchPhase.Idle;
 
@@ -35,6 +45,11 @@ public sealed class LobbyStateMachine
 
     public IReadOnlyList<LobbyEffect> Apply(StatsMessage message)
     {
+        if (_next is not null || (Holding && StartsNewSession(message)))
+        {
+            return FollowNext(message);
+        }
+
         var effects = new List<LobbyEffect>();
         switch (message)
         {
@@ -58,6 +73,92 @@ public sealed class LobbyStateMachine
         PanelVisible = !PanelVisible;
         _openedManually = PanelVisible;
         return [new PanelVisibilityEffect(PanelVisible, PanelChangeReason.Manual)];
+    }
+
+    /// <summary>A game with at least two players is over (or was left): its lobby stays until the next game.</summary>
+    private bool Holding => Phase is MatchPhase.Ended or MatchPhase.Live && _players.Count >= PlayersForNewGame;
+
+    /// <summary>Would this message start a new match? (The same tests as the Ended and Live handling below.)</summary>
+    private bool StartsNewSession(StatsMessage message) => message switch
+    {
+        UpdateStateMessage u => u.Players.Count > 0 && (Phase == MatchPhase.Ended
+            ? IsNewMatch(u.MatchGuid)
+            : u.MatchGuid is not null && MatchGuid is not null && u.MatchGuid != MatchGuid),
+        PlayerPresenceMessage p => Phase == MatchPhase.Ended && p.Joined && IsNewMatch(p.MatchGuid),
+        MatchEventMessage { Kind: MatchEventKind.MatchCreated } => true,
+        MatchEventMessage { Kind: MatchEventKind.MatchInitialized or MatchEventKind.RoundStarted } evt =>
+            Phase == MatchPhase.Ended && IsNewMatch(evt.MatchGuid),
+        _ => false,
+    };
+
+    /// <summary>
+    /// The session after a kept lobby. It runs in its own state machine whose effects aren't shown, so the kept lobby
+    /// stays on screen; once it has two players it takes over, and if it ends first it is forgotten.
+    /// </summary>
+    private IReadOnlyList<LobbyEffect> FollowNext(StatsMessage message)
+    {
+        if (_next is null)
+        {
+            _next = new LobbyStateMachine();
+            Phase = MatchPhase.Ended; // whatever was kept is over now
+        }
+
+        _next.Apply(message);
+        if (_next._players.Count >= PlayersForNewGame)
+        {
+            return Adopt(_next);
+        }
+
+        if (_next.Phase is MatchPhase.Idle or MatchPhase.Ended)
+        {
+            // Freeplay, training or a lone private match ended: keep showing the last game's lobby.
+            _next = null;
+            _destroyed = true;
+        }
+
+        return [];
+    }
+
+    /// <summary>The followed session has enough players: it replaces the kept lobby, as if it had started normally.</summary>
+    private List<LobbyEffect> Adopt(LobbyStateMachine next)
+    {
+        _next = null;
+        var effects = new List<LobbyEffect>();
+        if (_players.Count > 0 || Phase != MatchPhase.Idle)
+        {
+            _players.Clear();
+            effects.Add(new LobbyClearedEffect(PanelChangeReason.MatchStarted));
+        }
+
+        MatchGuid = next.MatchGuid;
+        MatchPlaylistId = next.MatchPlaylistId;
+        _destroyed = next._destroyed;
+        Phase = next.Phase;
+        effects.Add(new MatchStartedEffect(MatchGuid, Phase));
+        if (MatchPlaylistId is { } playlistId)
+        {
+            effects.Add(new MatchPlaylistEffect(playlistId));
+        }
+
+        foreach (var entry in next._players.Values.OrderBy(e => e.Sequence))
+        {
+            _players[entry.Player.Key] = new Entry(entry.Player, _joinSequence++) { MissedTicks = entry.MissedTicks };
+            effects.Add(new PlayerAddedEffect(entry.Player));
+        }
+
+        if (next.PanelVisible && !PanelVisible)
+        {
+            PanelVisible = true;
+            _openedManually = false;
+            effects.Add(new PanelVisibilityEffect(true, PanelChangeReason.MatchStarted));
+        }
+        else if (!next.PanelVisible && PanelVisible && Phase == MatchPhase.Live)
+        {
+            PanelVisible = false;
+            effects.Add(new PanelVisibilityEffect(false, PanelChangeReason.Kickoff));
+        }
+
+        return effects;
     }
 
     /// <summary>The Stats API socket closed (game exited or crashed): hide and clear.</summary>
@@ -292,6 +393,7 @@ public sealed class LobbyStateMachine
 
     private void EndMatch(PanelChangeReason reason, List<LobbyEffect> effects)
     {
+        _next = null;
         if (PanelVisible)
         {
             PanelVisible = false;

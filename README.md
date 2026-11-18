@@ -1,13 +1,14 @@
 # Gr1m's RL Overlay
 
-A small companion overlay for Rocket League. When you load into a match, a glass panel appears just below the
-scoreboard with every player's row from **tracker.gg** for the playlist you choose (2v2 by default): rank,
-division, rating and how far to the next division, plus the stats you pick (**Wins**, **Streak** and **Peak MMR**
-by default). Rows appear as players join, Blue and Orange each get their own block, and the columns line up from
-player to player. The panel fades out at kickoff, and clicking a name opens that player's full tracker.gg profile.
-After the match the lobby stays available (`Ctrl+R`) so you can look up who you just played, until you load into
-the next match or close the game. The app waits quietly in the tray and switches on by itself when Rocket League
-starts. No account or API key is needed.
+A small companion overlay for Rocket League. When you load into a match, a glass panel appears in the top-right
+corner of the game's screen with every player's row from **tracker.gg** for the playlist you choose (2v2 by
+default): rank, division, rating and how far to the next division, plus the stats you pick (**Wins**, **Streak** and
+**Peak MMR** by default, and an **All-time peak** for 1v1, 2v2 and 3v3 if you tick it). Rows appear as players join,
+Blue and Orange each get their own block, and the columns line up from player to player. Drag the header to move
+the panel and drag a corner to resize it. The panel fades out at kickoff, and clicking a name opens that player's
+full tracker.gg profile. After the match the whole lobby stays available (`Ctrl+R`) so you can look up who you just
+played, through freeplay and the menus, until you load into a new game with other players or close the game. The
+app waits quietly in the tray and switches on by itself when Rocket League starts. No account or API key is needed.
 
 ![The lobby screen (preview with made-up players)](docs/screenshots/01_screen_layout.png)
 
@@ -19,6 +20,8 @@ tracker.gg page. The repository holds no screenshots of tracker.gg pages because
 | `Ctrl+R` | Show / hide the lobby (works during the match too, where the next kickoff hides it again, and after the match) |
 | `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Tournaments, Casual. Every row moves at once, without reloading |
 | Click a name | Opens that player's tracker.gg profile in your browser |
+| Drag the header | Moves the panel anywhere on the game's screen (the dotted grip on the right shows where to grab) |
+| Drag a corner | Resizes the panel, from 75 % to 150 % (blue brackets show the corners when the pointer is over them) |
 
 The shortcuts can be changed in Settings and only work while Rocket League is the window in front.
 
@@ -40,6 +43,9 @@ player, exactly as if you opened their profile in a tab. The app then hides the 
 
 * the table row for the selected playlist (rank icon, rank and division, rating, the up/down to the next division),
   plus the *Peak Rating* and *Streak* cells if they are ticked, without the ⋮ menu;
+* for Ranked Duel 1v1, Doubles 2v2 and Standard 3v3, the *All-Time Peak* if it is ticked: the "Best" rank and
+  rating from the page's peak-rating box, labelled *All-Time Peak*. The other playlists have no such box on
+  tracker.gg's main page, so the column simply isn't there for them;
 * the stat tiles you ticked (*Wins*, *Goals*, *Shots*, *Assists*, *Saves*, *MVPs*), copied from the same page.
 
 The app finds the row and tiles by their names and measures their size so every player's columns line up. It never
@@ -115,7 +121,8 @@ and need no .NET install. They are not code-signed, so Windows SmartScreen may w
 3. **Set the game to Borderless.** Rocket League → Settings → Video → *Display Mode* → **Borderless** (or Windowed).
    In exclusive fullscreen the overlay can't be drawn on top; the app tells you once if it sees that.
 4. **Pick the stats** (optional). Settings → *Stats next to each rank*: Wins, Streak and Peak MMR are ticked; add
-   Goals, Shots, Assists, Saves or MVPs, or untick any. Every stat makes the rows wider.
+   All-time peak (1v1, 2v2 and 3v3 only), Goals, Shots, Assists, Saves or MVPs, or untick any. Every stat makes the
+   rows wider.
 5. *Start with Windows* (Settings → *General*) is on if you kept the setup default. Press **Save** after changes.
 
 Settings → *Game connection* shows a green dot and "Connected to Rocket League" once the game is running with the
@@ -123,15 +130,17 @@ Stats API on.
 
 ## In a match
 
-* Load into any match: the lobby slides in below the scoreboard and fills in as players arrive.
-* `Ctrl+G` moves every row to another playlist's row on the same pages (no reload). *Follow the match's playlist*
-  (on by default) starts on the playlist you're actually playing.
+* Load into any match: the lobby slides in at the top right of the game's screen and fills in as players arrive.
+* Drag the header to move it and drag any corner to make it bigger or smaller (it won't go below 75 % or above
+  150 %). Where you leave it is saved straight away and used for every match after.
+* `Ctrl+G` moves every row to another playlist's row on the same pages (no reload). Every match starts on your
+  default playlist; tick *Follow the match's playlist* in Settings to start on the playlist you're actually playing.
 * Clicking a name opens the full profile in your browser. While the browser is in front the overlay hides; alt-tab
   back to the game and it returns.
 * At kickoff the lobby fades out. `Ctrl+R` brings it back mid-match; the next kickoff hides it again.
-* **After the match** the lobby is kept: press `Ctrl+R` on the podium or back in the menus to see everyone you just
-  played with and click their names. It is replaced when you load into the next match and cleared when you close
-  the game.
+* **After the match** the whole lobby is kept: press `Ctrl+R` on the podium, back in the menus or in freeplay to see
+  everyone you just played with and click their names. Freeplay and training don't replace it. It is replaced once
+  you load into a new game with at least one other player, and cleared when you close the game.
 
 **Standby:** while Rocket League is closed the app does nothing but wait (tray tooltip: *standby*). When the game
 starts it switches on and shows a short notice (turn that off in Settings → *General*); when the game closes it goes
@@ -143,17 +152,19 @@ Right-click the tray icon for *Show/Hide lobby*, **Settings…**, *Enable Stats 
 double-click opens Settings. Starting the exe again while it runs also opens Settings in the running copy.
 
 The settings window covers the game connection (Stats API status per ini file, *Enable Stats API…*, the port), the
-**stats next to each rank** (Wins, Streak, Peak MMR, Goals, Shots, Assists, Saves, MVPs), which playlists `Ctrl+G`
-cycles through and the default, the two shortcuts (click a field and press the new combination), position and size,
-and *Start with Windows*. **Preview** shows the lobby screen with made-up players while you adjust it; nothing is
-kept until you press **Save**.
+**stats next to each rank** (Wins, Streak, Peak MMR, All-time peak, Goals, Shots, Assists, Saves, MVPs), which
+playlists `Ctrl+G` cycles through and the default, the two shortcuts (click a field and press the new combination),
+size (75 % to 150 %, with *Reset to top right* to put the panel back in its corner) and *Start with Windows*.
+**Preview** shows the lobby screen with made-up players while you adjust it, and you can drag it around and resize
+it there too; nothing is kept until you press **Save**.
 
 ![Settings](docs/screenshots/08_settings.png)
 
-**Updating from an earlier version:** the RapidAPI, tracker.gg-key and test-data sources, the `Ctrl+T` window and the
-rank icon downloads are gone; tracker.gg's rows are now the main screen. Your stat choice starts once at the new
-defaults (Wins, Streak, Peak MMR), old API keys are dropped the next time settings are saved, and everything else
-(shortcuts, playlists, position, size) is kept.
+**Updating from an earlier version:** 0.4 moves the panel once to the new top-right spot at 85 % and turns
+*Follow the match's playlist* off; drag it wherever you like afterwards. Your stats, shortcuts and playlists are
+kept. From 0.2 or older: the RapidAPI, tracker.gg-key and test-data sources, the `Ctrl+T` window and the rank icon
+downloads are gone; tracker.gg's rows are now the main screen, your stat choice starts once at the defaults (Wins,
+Streak, Peak MMR) and old API keys are dropped the next time settings are saved.
 
 ## Try it without the game
 
@@ -203,7 +214,8 @@ dotnet test RLOverlay.sln
 | *Not found on tracker.gg* for someone you know is there | Console and Epic players are found by the name the game shows; if their tracker.gg profile uses another name, click their name and search on tracker.gg. |
 | A stat tile is missing for one player | Their tracker.gg page doesn't show that tile (yet). The others still line up. |
 | Shortcuts do nothing | They only work while Rocket League is in front. If another app already uses the combination, the log says so; pick another in Settings. |
-| Lobby in the wrong place or too wide | Settings → *Position and size* (with **Preview** on to see it move), or untick some stats. |
+| Lobby in the wrong place or too wide | Drag its header or a corner (in a match, or with **Preview** on in Settings). Settings → *Position and size* → *Reset to top right* puts it back. Unticking some stats makes it narrower. |
+| The lobby after a match is gone | It is kept through freeplay and the menus, and replaced by the next game that has other players in it. Joining a match and leaving before anyone else arrives keeps it too. |
 
 ## Files
 

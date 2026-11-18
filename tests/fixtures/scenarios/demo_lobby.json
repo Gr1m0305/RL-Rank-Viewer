@@ -7,10 +7,10 @@
   "tickRate": 10,
   "steps": [
     { "at": 0, "event": "MatchCreated" },
-    { "at": 300, "join": { "name": "Zephyr", "primaryId": "Epic|7f3a9c1e2b7d4e8f9a0b1c2d3e4f5a6b|0", "team": 0 } },
-    { "at": 1100, "join": { "name": "Nova_RL", "primaryId": "PS4|4829173650192837465|0", "team": 1 } },
-    { "at": 1900, "join": { "name": "kickoffKing", "primaryId": "Steam|76561198012345678|0", "team": 0 } },
-    { "at": 2700, "join": { "name": "flipreset.exe", "primaryId": "XboxOne|2535412345678901|0", "team": 1, "connectingMs": 1200 } },
+    { "at": 300, "join": { "name": "Gr1m", "primaryId": "Epic|7f3a9c1e2b7d4e8f9a0b1c2d3e4f5a6b|0", "team": 0 } },
+    { "at": 1100, "join": { "name": "Rizza", "primaryId": "PS4|4829173650192837465|0", "team": 1 } },
+    { "at": 1900, "join": { "name": "Khimaira", "primaryId": "Steam|76561198012345678|0", "team": 0 } },
+    { "at": 2700, "join": { "name": "Homebody John", "primaryId": "XboxOne|2535412345678901|0", "team": 1, "connectingMs": 1200 } },
     { "at": 5000, "ticks": false }
   ]
 }

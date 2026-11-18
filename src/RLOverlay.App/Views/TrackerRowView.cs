@@ -126,7 +126,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
         _url = sample ? null : TrackerUrls.Profile(player.Id);
 
         Margin = new Thickness(0, 0, 0, 6);
-        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(176) });
+        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(196) });
         ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         // Name (+ platform badge), then a status line with a reload button.
@@ -139,7 +139,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
         {
             FontSize = 14.5,
             FontWeight = FontWeights.SemiBold,
-            MaxWidth = 112,
+            MaxWidth = 132,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -649,7 +649,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
             case TrackerRowState.Sample:
                 width = SampleWidth();
-                height = _options.Tiles.Count > 0 ? TileRowHeight : RowHeight;
+                height = _options.Tiles.Count > 0 || (_options.Best && HasAllTimePeak) ? TileRowHeight : RowHeight;
                 pageZoom = _zoom;
                 webWidth = _viewport;
                 webHeight = LoadingHeight;
@@ -657,7 +657,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
             default:
                 width = Math.Ceiling(_textWidth);
-                height = _options.Tiles.Count > 0 ? TileRowHeight : RowHeight;
+                height = _options.Tiles.Count > 0 || (_options.Best && HasAllTimePeak) ? TileRowHeight : RowHeight;
                 pageZoom = _zoom;
                 webWidth = _viewport;
                 webHeight = LoadingHeight;
@@ -686,7 +686,11 @@ internal sealed class TrackerRowView : Grid, IDisposable
     /// Roughly how wide tracker.gg's row is with the picked stats (CSS pixels measured at 1024 wide, November 2026), for
     /// the Preview's placeholders.
     /// </summary>
-    private double SampleWidth() => 412 + (_options.Peak ? 111 : 0) + (_options.Streak ? 106 : 0) + (_options.Tiles.Count * 120);
+    private double SampleWidth() =>
+        412 + (_options.Peak ? 111 : 0) + (_options.Streak ? 106 : 0) + (_options.Best && HasAllTimePeak ? 157 : 0) + (_options.Tiles.Count * 120);
+
+    /// <summary>tracker.gg's Peak Rating card only covers Ranked Duel, Doubles and Standard.</summary>
+    private bool HasAllTimePeak => _label is "Ranked Duel 1v1" or "Ranked Doubles 2v2" or "Ranked Standard 3v3";
 
     private string SampleText()
     {
@@ -699,6 +703,11 @@ internal sealed class TrackerRowView : Grid, IDisposable
         if (_options.Streak)
         {
             parts.Add("Streak");
+        }
+
+        if (_options.Best && HasAllTimePeak)
+        {
+            parts.Add("All-time peak");
         }
 
         parts.AddRange(_options.Tiles);

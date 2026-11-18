@@ -5,14 +5,18 @@ namespace RLOverlay.Core.Config;
 /// <summary>User settings, saved as JSON in <c>%LOCALAPPDATA%\RLOverlay\settings.json</c>.</summary>
 public sealed class OverlaySettings
 {
+    /// <summary>Smallest size: below this tracker.gg's rows get hard to read.</summary>
     public const double MinScale = 0.75;
     public const double MaxScale = 1.5;
 
+    /// <summary>Size for new settings and after Reset.</summary>
+    public const double DefaultScale = 0.85;
+
     /// <summary>
-    /// 2 = the tracker.gg screen (Wins, Streak and Peak MMR ticked by default); files from version 1 are upgraded by
-    /// <see cref="Upgrade"/> when loaded.
+    /// 3 = top-right placement and the smaller default size, Follow the match's playlist off; 2 = the tracker.gg screen
+    /// (Wins, Streak and Peak MMR ticked by default). Older files are upgraded by <see cref="Upgrade"/> when loaded.
     /// </summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -21,8 +25,8 @@ public sealed class OverlaySettings
 
     public List<Playlist> EnabledPlaylists { get; set; } = [.. Enum.GetValues<Playlist>()];
 
-    /// <summary>Start each match on the playlist the game reports (Game.PlaylistId) when it is enabled.</summary>
-    public bool FollowMatchPlaylist { get; set; } = true;
+    /// <summary>Start each match on the playlist the game reports (Game.PlaylistId) when it is enabled. Off by default.</summary>
+    public bool FollowMatchPlaylist { get; set; }
 
     /// <summary>Stats shown next to each player's tracker.gg rank row.</summary>
     public StatColumns Columns { get; set; } = new();
@@ -32,12 +36,12 @@ public sealed class OverlaySettings
 
     public string CycleHotkey { get; set; } = "Ctrl+G";
 
-    // Position (DIPs, relative to the top-centre anchor) and scale
+    // Position (DIPs from the top-right corner, see PanelPlacement; set by dragging the screen) and size
     public double OffsetX { get; set; }
 
     public double OffsetY { get; set; }
 
-    public double Scale { get; set; } = 1.0;
+    public double Scale { get; set; } = DefaultScale;
 
     // General
     public bool RunAtStartup { get; set; }
@@ -53,7 +57,7 @@ public sealed class OverlaySettings
     /// <summary>Clamp values into range and repair invalid lists after loading or editing.</summary>
     public OverlaySettings Normalize()
     {
-        Scale = double.IsFinite(Scale) ? Math.Clamp(Scale, MinScale, MaxScale) : 1.0;
+        Scale = double.IsFinite(Scale) ? Math.Clamp(Scale, MinScale, MaxScale) : DefaultScale;
         OffsetX = double.IsFinite(OffsetX) ? Math.Clamp(OffsetX, -4000, 4000) : 0;
         OffsetY = double.IsFinite(OffsetY) ? Math.Clamp(OffsetY, -4000, 4000) : 0;
         EnabledPlaylists = (EnabledPlaylists ?? []).Where(Enum.IsDefined).Distinct().OrderBy(p => p).ToList();
@@ -89,12 +93,22 @@ public sealed class OverlaySettings
     /// <summary>
     /// Brings settings saved by an older version up to date. Version 1 (the RapidAPI panel) had every stat column on
     /// by default; the tracker.gg screen starts with just Wins, Streak and Peak MMR, since each stat widens the rows.
+    /// Version 2 measured the position from the top centre: the screen now starts in the top-right corner at the new
+    /// default size, and Follow the match's playlist starts off.
     /// </summary>
     public OverlaySettings Upgrade()
     {
         if (SchemaVersion < 2)
         {
             Columns = new StatColumns();
+        }
+
+        if (SchemaVersion < 3)
+        {
+            OffsetX = 0;
+            OffsetY = 0;
+            Scale = DefaultScale;
+            FollowMatchPlaylist = false;
         }
 
         SchemaVersion = Math.Max(SchemaVersion, CurrentSchemaVersion);
@@ -107,8 +121,9 @@ public sealed class OverlaySettings
 
 /// <summary>
 /// Which stats are shown next to each player's tracker.gg rank row. Wins, Goals, Shots, Assists, Saves and MVPs are
-/// tracker.gg's lifetime tiles; Peak (peak rating) and Streak (matches and streak) are cells of the playlist's row.
-/// Wins, Streak and Peak are on by default.
+/// tracker.gg's lifetime tiles; Peak (this season's peak rating) and Streak (matches and streak) are cells of the
+/// playlist's row; AllTimePeak is the "Best" rating from the profile's Peak Rating card, which tracker.gg only has for
+/// Ranked Duel, Doubles and Standard. Wins, Streak and Peak are on by default.
 /// </summary>
 public sealed class StatColumns
 {
@@ -117,6 +132,8 @@ public sealed class StatColumns
     public bool Streak { get; set; } = true;
 
     public bool Peak { get; set; } = true;
+
+    public bool AllTimePeak { get; set; }
 
     public bool Goals { get; set; }
 

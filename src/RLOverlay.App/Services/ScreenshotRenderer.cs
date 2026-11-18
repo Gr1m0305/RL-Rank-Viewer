@@ -26,10 +26,10 @@ internal static class ScreenshotRenderer
 
     private static readonly (string Name, string PrimaryId, int Team)[] Lobby2v2 =
     [
-        ("Zephyr", "Epic|7f3a9c1e2b7d4e8f9a0b1c2d3e4f5a6b|0", 0),
-        ("kickoffKing", "Steam|76561198012345678|0", 0),
-        ("Nova_RL", "PS4|4829173650192837465|0", 1),
-        ("flipreset.exe", "XboxOne|2535412345678901|0", 1),
+        ("Gr1m", "Epic|7f3a9c1e2b7d4e8f9a0b1c2d3e4f5a6b|0", 0),
+        ("Khimaira", "Steam|76561198012345678|0", 0),
+        ("Rizza", "PS4|4829173650192837465|0", 1),
+        ("Homebody John", "XboxOne|2535412345678901|0", 1),
     ];
 
     public static IReadOnlyList<string> RenderAll(string directory)

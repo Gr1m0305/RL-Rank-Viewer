@@ -85,6 +85,7 @@ public sealed partial class PanelViewModel : ObservableObject
             Wins = settings.Columns.Wins,
             Streak = settings.Columns.Streak,
             Peak = settings.Columns.Peak,
+            AllTimePeak = settings.Columns.AllTimePeak,
             Goals = settings.Columns.Goals,
             Shots = settings.Columns.Shots,
             Assists = settings.Columns.Assists,

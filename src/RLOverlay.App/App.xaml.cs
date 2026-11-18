@@ -102,8 +102,9 @@ public partial class App : Application
             return;
         }
 
-        // Only the normal (game) mode is single-instance; demo and screenshot runs may sit next to it.
-        if (!_args.Demo)
+        // Only the normal (game) mode is single-instance; demo, screenshot and test-server (--port) runs may sit next
+        // to it.
+        if (!_args.Demo && _args.Port is null)
         {
             _mutex = new Mutex(initiallyOwned: true, InstanceSignals.MutexName, out var created);
             if (!created)
@@ -230,6 +231,7 @@ public partial class App : Application
         _window.Strip = new PlaylistStripView { DataContext = _panel.Strip };
         _window.EnsureHandle();
         _window.Configure(() => _tracker.FindGameWindow(), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
+        _window.PlacementChanged += OnPlacementChanged;
 
         _coordinator = new OverlayCoordinator(_settings, _panel, _window, LoggerFactory.CreateLogger<OverlayCoordinator>())
         {

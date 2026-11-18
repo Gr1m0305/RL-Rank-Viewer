@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:RLOverlay.App.ViewModels"
+             xmlns:ov="clr-namespace:RLOverlay.App.Overlay"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:PanelViewModel}"
              FontFamily="{StaticResource UiFont}"
@@ -22,8 +23,32 @@
                 BorderThickness="1"
                 Padding="14,11,14,10">
             <StackPanel MinWidth="560">
-                <!-- Header: app badge, playlist title, subtitle; hotkey hints on the right. -->
-                <DockPanel x:Name="HeaderRow" Margin="1,0,0,9">
+                <!-- Header: app badge, playlist title, subtitle; hotkey hints and the move grip on the right. Dragging the
+                     header moves the screen. -->
+                <DockPanel x:Name="HeaderRow" Margin="1,0,0,9" Background="Transparent" Cursor="SizeAll"
+                           ov:OverlayHit.IsInteractive="True" ov:OverlayHit.Drag="Move">
+                    <Path DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <Path.Data>
+                            <GeometryGroup>
+                                <EllipseGeometry Center="1.5,1.5" RadiusX="1.5" RadiusY="1.5" />
+                                <EllipseGeometry Center="6.5,1.5" RadiusX="1.5" RadiusY="1.5" />
+                                <EllipseGeometry Center="1.5,6.5" RadiusX="1.5" RadiusY="1.5" />
+                                <EllipseGeometry Center="6.5,6.5" RadiusX="1.5" RadiusY="1.5" />
+                                <EllipseGeometry Center="1.5,11.5" RadiusX="1.5" RadiusY="1.5" />
+                                <EllipseGeometry Center="6.5,11.5" RadiusX="1.5" RadiusY="1.5" />
+                            </GeometryGroup>
+                        </Path.Data>
+                        <Path.Style>
+                            <Style TargetType="Path">
+                                <Setter Property="Fill" Value="{StaticResource TextMuted}" />
+                                <Style.Triggers>
+                                    <Trigger Property="ov:OverlayHit.IsHovered" Value="True">
+                                        <Setter Property="Fill" Value="{StaticResource TextPrimary}" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Path.Style>
+                    </Path>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
                         <ItemsControl ItemsSource="{Binding CycleKeys}"
                                       ItemTemplate="{StaticResource KeyCapTemplate}"

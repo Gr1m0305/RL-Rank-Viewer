@@ -190,7 +190,11 @@ internal sealed class OverlayCoordinator : IDisposable
                 case LobbyClearedEffect cleared:
                     _logger.LogInformation("Lobby cleared ({Reason})", cleared.Reason);
                     HideStrip();
-                    ShowPanel(false);
+                    if (cleared.Reason != PanelChangeReason.MatchStarted)
+                    {
+                        ShowPanel(false); // a new match decides for itself (it may keep a Ctrl+R screen open)
+                    }
+
                     _vm.Phase = MatchPhase.Idle;
                     _vm.Clear();
                     break;

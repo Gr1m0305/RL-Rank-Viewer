@@ -46,10 +46,11 @@ public sealed record TrackerCell(string Key, int Width);
 
 /// <summary>
 /// What is shown next to a player's rank (tracker.gg's playlist icon, rank, rating and division up/down, which are
-/// always there): the playlist row's <see cref="Peak"/> rating and <see cref="Streak"/> (matches) cells, and tracker.gg's
+/// always there): the playlist row's <see cref="Peak"/> rating and <see cref="Streak"/> (matches) cells, the all-time
+/// <see cref="Best"/> rating from the Peak Rating card (Ranked Duel, Doubles and Standard only), and tracker.gg's
 /// lifetime stat tiles named in <see cref="Tiles"/> ("Wins", "Goals", ...) in that order.
 /// </summary>
-public sealed record TrackerCropOptions(bool Peak, bool Streak, IReadOnlyList<string> Tiles)
+public sealed record TrackerCropOptions(bool Peak, bool Streak, IReadOnlyList<string> Tiles, bool Best = false)
 {
     /// <summary>Just the rank: no extra cells or tiles.</summary>
     public static TrackerCropOptions RankOnly { get; } = new(false, false, []);
@@ -72,11 +73,11 @@ public sealed record TrackerCropOptions(bool Peak, bool Streak, IReadOnlyList<st
         Tile(columns.Assists, "Assists");
         Tile(columns.Saves, "Saves");
         Tile(columns.Mvps, "MVPs");
-        return new TrackerCropOptions(columns.Peak, columns.Streak, tiles);
+        return new TrackerCropOptions(columns.Peak, columns.Streak, tiles, columns.AllTimePeak);
     }
 
     /// <summary>Compares by content (records compare lists by reference).</summary>
-    public string Key => $"{Peak}|{Streak}|{string.Join(",", Tiles)}";
+    public string Key => $"{Peak}|{Streak}|{Best}|{string.Join(",", Tiles)}";
 }
 
 /// <summary>
@@ -89,7 +90,9 @@ public sealed record TrackerCropOptions(bool Peak, bool Streak, IReadOnlyList<st
 /// Page structure (checked November 2026): <c>table.trn-table</c> → <c>tbody tr</c> per playlist, the label in
 /// <c>td.name .playlist</c>, then <c>td.rating</c> (rating), two <c>td.change</c> (division up/down), a second
 /// <c>td.rating</c> (peak rating), <c>td.matches</c> (matches and streak) and the menu in <c>td.tools</c>. The lifetime
-/// tiles are <c>div.stats &gt; div.stat</c> with the label in <c>.name</c> and a <c>.more</c> chevron. Everything is
+/// tiles are <c>div.stats &gt; div.stat</c> with the label in <c>.name</c> and a <c>.more</c> chevron. The sidebar's
+/// <c>.peak-rating-widget</c> has an <c>h3</c> per ranked playlist (Duel, Doubles, Standard) followed by a
+/// <c>.ratings-grid</c> of "Current" and "Best" blocks, each titled by an <c>h4.rating__title</c>. Everything is
 /// copied (not moved) so the site's own scripts keep working. Column widths are taken from the first layout and
 /// reused, so the copy keeps tracker.gg's spacing when the embedded view is resized or the playlist changes.
 /// </remarks>
@@ -118,7 +121,7 @@ public static class TrackerPage
     public static string CropScript(string label, TrackerCropOptions options, IReadOnlyList<TrackerCell>? columns = null)
     {
         var widths = (columns ?? []).Select(c => new { key = c.Key, width = c.Width });
-        var args = JsonSerializer.Serialize(new { label, peak = options.Peak, streak = options.Streak, tiles = options.Tiles, widths });
+        var args = JsonSerializer.Serialize(new { label, peak = options.Peak, streak = options.Streak, best = options.Best, tiles = options.Tiles, widths });
         return $"({CropFunction})({args})";
     }
 
@@ -277,16 +280,37 @@ public static class TrackerPage
           const shell = card.cloneNode(false);
           shell.appendChild(clone);
           host.appendChild(shell);
+          let bestMissing = 0;
+          if (opt.best) {
+            // All-time peak: the "Best" block under this playlist in the Peak Rating card. Only Ranked Duel, Doubles
+            // and Standard have one; other playlists simply show none.
+            const widget = document.querySelector('.peak-rating-widget');
+            const sec = widget ? [...widget.querySelectorAll('h3')].find(h => norm(h.textContent) === norm(opt.label)) : null;
+            const title = d => { const t = d.querySelector('.rating__title'); return norm(t ? t.textContent : ''); };
+            const best = sec ? [...sec.parentElement.querySelectorAll('.ratings-grid > div')].find(d => title(d) === 'best') : null;
+            if (best) {
+              const bestShell = widget.cloneNode(false), bestGrid = best.parentElement.cloneNode(false), b = best.cloneNode(true);
+              b.querySelectorAll('.rating__title, .more').forEach(x => x.remove());
+              b.classList.add('rlo-best');
+              const cap = document.createElement('div'); cap.className = 'rlo-cap'; cap.textContent = 'All-Time Peak';
+              b.prepend(cap);
+              bestGrid.appendChild(b);
+              bestShell.appendChild(bestGrid);
+              host.appendChild(bestShell);
+              keyed(b, 'best');
+              kept.push(b);
+            } else if (!widget) bestMissing = 1; // the card may still be on its way
+          }
           const want = (opt.tiles || []).map(norm);
           const all = want.length ? [...document.querySelectorAll('div.stats > div.stat')] : [];
           const label = t => { const n = t.querySelector('.name'); return norm(n ? n.textContent : ''); };
           const tiles = want.map(w => all.find(t => label(t) === w)).filter(t => t);
-          let capColor = 'rgb(181, 208, 255)', tileGrid = null;
+          let capColor = 'rgb(181, 208, 255)', tileGrid = null, tileShell = null;
           if (tiles.length) {
             const grid = tiles[0].parentElement, statsCard = grid.closest('.card') || grid.parentElement;
             const name = tiles[0].querySelector('.name');
             if (name) capColor = getComputedStyle(name).color;
-            const tileShell = statsCard.cloneNode(false);
+            tileShell = statsCard.cloneNode(false);
             tileGrid = grid.cloneNode(false);
             tiles.forEach(t => {
               const c = t.cloneNode(true);
@@ -310,6 +334,8 @@ public static class TrackerPage
             '#rlo-crop td{white-space:nowrap!important}' +
             '#rlo-crop .stats{display:flex!important;flex-wrap:nowrap!important;margin:0!important;padding:0!important}' +
             '#rlo-crop .stat{flex:none!important;width:max-content!important;min-width:0!important;max-width:none!important;margin:0!important}' +
+            '#rlo-crop .ratings-grid{display:block!important;margin:0!important;padding:0!important}' +
+            '#rlo-crop .rlo-best{padding:0 18px!important;box-sizing:border-box}' +
             '#rlo-crop .rlo-cap{font-size:13px;font-weight:500;line-height:1.2;color:' + capColor + '}';
           // Sizes only (layout, never the numbers): each column's natural width, then line up with the other rows.
           const cellsOut = kept.map(k => ({ key: k.dataset.rlo, width: Math.ceil(k.getBoundingClientRect().width) }));
@@ -320,6 +346,13 @@ public static class TrackerPage
             align.forEach((a, i) => {
               if (have.has(a.key)) return;
               // A column this player's page doesn't have (e.g. no peak yet): leave a gap so the rest still line up.
+              if (a.key === 'best') {
+                const gap = document.createElement('div');
+                gap.className = 'rlo-best';
+                host.insertBefore(gap, tileShell || null);
+                have.set(a.key, gap);
+                return;
+              }
               const parent = isTile(a.key) ? tileGrid : row;
               if (!parent) return;
               const next = align.slice(i + 1).map(b => have.get(b.key)).find(n => n && n.parentElement === parent);
@@ -341,7 +374,7 @@ public static class TrackerPage
             });
           }
           const r = host.getBoundingClientRect();
-          return { status: 'ok', width: Math.ceil(r.width), height: Math.ceil(r.height), background: bg, missing: want.length - tiles.length, cells: cellsOut };
+          return { status: 'ok', width: Math.ceil(r.width), height: Math.ceil(r.height), background: bg, missing: want.length - tiles.length + bestMissing, cells: cellsOut };
         }
         """;
 }

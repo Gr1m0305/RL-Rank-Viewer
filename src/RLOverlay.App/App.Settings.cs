@@ -130,6 +130,31 @@ public partial class App : ISettingsHost
         _window!.Configure(() => _tracker!.FindGameWindow(), settings.OffsetX, settings.OffsetY, settings.Scale);
     }
 
+    /// <summary>
+    /// The screen was dragged or resized. During the Preview that goes into the settings being edited (Save keeps it,
+    /// Cancel puts it back); otherwise it is saved straight away.
+    /// </summary>
+    private void OnPlacementChanged(double offsetX, double offsetY, double scale)
+    {
+        var editor = _settingsWindow?.DataContext as SettingsViewModel;
+        if (_coordinator?.IsPreviewing == true && editor is not null)
+        {
+            editor.SetPlacement(offsetX, offsetY, scale);
+            return;
+        }
+
+        var settings = _settings.Clone();
+        settings.OffsetX = Math.Round(offsetX);
+        settings.OffsetY = Math.Round(offsetY);
+        settings.Scale = Math.Round(scale, 2);
+        _settings = settings.Normalize();
+        _store!.Save(_settings);
+        _panelView!.SetZoom(_settings.Scale);
+        _window!.Configure(() => _tracker!.FindGameWindow(), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
+        editor?.PlacementSaved(_settings.OffsetX, _settings.OffsetY, _settings.Scale);
+        _log.LogInformation("Screen moved to {X}, {Y} from the top-right corner at {Size:0} %", _settings.OffsetX, _settings.OffsetY, _settings.Scale * 100);
+    }
+
     void ISettingsHost.Save(OverlaySettings settings, bool runAtStartup)
     {
         var old = _settings;

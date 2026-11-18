@@ -22,6 +22,9 @@ internal static partial class NativeMethods
     public const int WM_MOUSEACTIVATE = 0x0021;
     public const int WM_HOTKEY = 0x0312;
     public const int MA_NOACTIVATE = 3;
+    public const int VK_LBUTTON = 0x01;
+    public const int VK_RBUTTON = 0x02;
+    public const int SM_SWAPBUTTON = 23;
 
     // SetWindowPos
     public static readonly IntPtr HWND_TOPMOST = new(-1);
@@ -115,6 +118,16 @@ internal static partial class NativeMethods
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [LibraryImport("user32.dll")]
+    public static partial short GetAsyncKeyState(int vKey);
+
+    [LibraryImport("user32.dll")]
+    public static partial int GetSystemMetrics(int nIndex);
+
+    /// <summary>Is the primary mouse button held down right now (left, or right when the buttons are swapped)?</summary>
+    public static bool PrimaryButtonDown() =>
+        (GetAsyncKeyState(GetSystemMetrics(SM_SWAPBUTTON) != 0 ? VK_RBUTTON : VK_LBUTTON) & 0x8000) != 0;
 
     [LibraryImport("user32.dll")]
     public static partial IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);

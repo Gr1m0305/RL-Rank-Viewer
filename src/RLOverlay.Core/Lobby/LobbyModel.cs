@@ -15,7 +15,8 @@ public enum MatchPhase
 
     /// <summary>
     /// Match over (MatchEnded, podium or MatchDestroyed). The roster is frozen so the last lobby can be reopened with
-    /// Ctrl+R and its profiles opened after the game; the next match or a lost connection (game closed) clears it.
+    /// Ctrl+R and its profiles opened after the game; the next game with at least two players or a lost connection (game
+    /// closed) clears it. Freeplay and training in between don't.
     /// </summary>
     Ended,
 }

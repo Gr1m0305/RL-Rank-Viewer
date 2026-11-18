@@ -1,16 +1,18 @@
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using RLOverlay.App.Native;
 using RLOverlay.Core.Config;
 
 namespace RLOverlay.App.Overlay;
 
 /// <summary>
-/// The transparent, always-on-top, never-activating overlay window. Click-through except over player names
-/// (see <see cref="ClickThroughController"/>). Fades/slides in and out, and positions itself top-centre on the
-/// game's monitor.
+/// The transparent, always-on-top, never-activating overlay window. Click-through except over player names, the
+/// header and the corner grips (see <see cref="ClickThroughController"/>). Fades/slides in and out, and positions
+/// itself in the top-right corner of the game's monitor; dragging the header moves it and dragging a corner resizes it.
 /// </summary>
 public partial class OverlayWindow : Window
 {
@@ -22,6 +24,8 @@ public partial class OverlayWindow : Window
     private static readonly TimeSpan FadeOut = TimeSpan.FromMilliseconds(250);
 
     private readonly ClickThroughController _clickThrough;
+    private readonly DispatcherTimer _dragTimer;
+    private DragStart? _drag;
     private IntPtr _hwnd;
     private Func<IntPtr>? _gameWindow;
     private double _offsetX;
@@ -35,7 +39,21 @@ public partial class OverlayWindow : Window
         SourceInitialized += OnSourceInitialized;
         SizeChanged += (_, _) => Reposition();
         DpiChanged += (_, _) => Reposition();
+
+        // The drag follows the cursor by polling, so it keeps going even if the cursor outruns the window (a window that
+        // never activates can't capture the mouse).
+        _dragTimer = new DispatcherTimer(DispatcherPriority.Render, Dispatcher) { Interval = TimeSpan.FromMilliseconds(10) };
+        _dragTimer.Tick += (_, _) => OnDragTick();
+        Root.PreviewMouseLeftButtonDown += OnMouseDown;
     }
+
+    /// <summary>
+    /// The user moved or resized the screen (drag ended): the new offset from the top-right corner in DIPs and the scale.
+    /// </summary>
+    public event Action<double, double, double>? PlacementChanged;
+
+    /// <summary>True while the user is dragging the header or a corner.</summary>
+    public bool IsDragging => _drag is not null;
 
     /// <summary>True while shown or fading in (false while fading out or hidden).</summary>
     public bool IsShowing => _wantVisible;
@@ -139,8 +157,8 @@ public partial class OverlayWindow : Window
         {
             // Strip-only (Ctrl+G while the panel is hidden): collapse the panel. While the window fades out the panel
             // keeps its layout, so the fade is not cut short.
-            var panelAppears = PanelOn && PanelHost.Visibility != Visibility.Visible;
-            PanelHost.Visibility = PanelOn ? Visibility.Visible : Visibility.Collapsed;
+            var panelAppears = PanelOn && PanelArea.Visibility != Visibility.Visible;
+            PanelArea.Visibility = PanelOn ? Visibility.Visible : Visibility.Collapsed;
             if (panelAppears && _wantVisible && RichMotion)
             {
                 // Strip was showing alone and now the panel joins it: stagger the panel in.
@@ -184,6 +202,7 @@ public partial class OverlayWindow : Window
         }
 
         _wantVisible = false;
+        EndDrag(commit: true);
         _clickThrough.Stop();
         AnimateOut(() =>
         {
@@ -204,7 +223,7 @@ public partial class OverlayWindow : Window
         }
     }
 
-    /// <summary>Top-centre of the game's monitor (primary monitor if the game is not found), plus the user offset.</summary>
+    /// <summary>Top-right corner of the game's monitor (primary monitor if the game is not found), plus the user offset.</summary>
     public void Reposition()
     {
         if (_hwnd == IntPtr.Zero || ActualWidth <= 0)
@@ -212,14 +231,125 @@ public partial class OverlayWindow : Window
             return;
         }
 
-        var game = _gameWindow?.Invoke() ?? IntPtr.Zero;
-        var monitor = game != IntPtr.Zero ? MonitorInfo.BoundsFor(game) : MonitorInfo.BoundsFor(IntPtr.Zero);
         var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
         var width = (int)Math.Ceiling(ActualWidth * dpi);
         var height = (int)Math.Ceiling(ActualHeight * dpi);
-        var (x, y) = PanelPlacement.TopCenter(monitor, width, height, _offsetX, _offsetY, dpi, (int)Math.Round(ShadowMargin * dpi));
+        var (x, y) = PanelPlacement.TopRight(Monitor(), width, height, _offsetX, _offsetY, dpi, (int)Math.Round(ShadowMargin * dpi));
         NativeMethods.SetWindowPos(_hwnd, NativeMethods.HWND_TOPMOST, x, y, 0, 0,
             NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOOWNERZORDER);
+    }
+
+    private PixelRect Monitor()
+    {
+        var game = _gameWindow?.Invoke() ?? IntPtr.Zero;
+        return game != IntPtr.Zero ? MonitorInfo.BoundsFor(game) : MonitorInfo.BoundsFor(IntPtr.Zero);
+    }
+
+    /// <summary>Where a drag started: cursor, window rectangle (physical pixels), scale and what is being dragged.</summary>
+    private sealed record DragStart(
+        OverlayDrag Kind, int CursorX, int CursorY, NativeMethods.RECT Window, PixelRect Monitor, double Dpi, int Shadow, double Scale);
+
+    private void OnMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        var kind = OverlayDrag.None;
+        for (var d = e.OriginalSource as DependencyObject; d is not null && kind == OverlayDrag.None; d = Parent(d))
+        {
+            kind = OverlayHit.GetDrag(d);
+        }
+
+        if (kind == OverlayDrag.None || _hwnd == IntPtr.Zero
+            || !NativeMethods.GetCursorPos(out var cursor) || !NativeMethods.GetWindowRect(_hwnd, out var rect))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        _drag = new DragStart(kind, cursor.X, cursor.Y, rect, Monitor(), dpi, (int)Math.Round(ShadowMargin * dpi), Scale.ScaleX);
+        _dragTimer.Start();
+
+        static DependencyObject? Parent(DependencyObject d) =>
+            d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+    }
+
+    private void OnDragTick()
+    {
+        if (_drag is not { } start)
+        {
+            _dragTimer.Stop();
+            return;
+        }
+
+        if (NativeMethods.GetCursorPos(out var cursor))
+        {
+            DragTo(start, cursor.X - start.CursorX, cursor.Y - start.CursorY);
+        }
+
+        if (!NativeMethods.PrimaryButtonDown())
+        {
+            EndDrag(commit: true);
+        }
+    }
+
+    private void EndDrag(bool commit)
+    {
+        if (_drag is null)
+        {
+            return;
+        }
+
+        _drag = null;
+        _dragTimer.Stop();
+        if (!commit)
+        {
+            return;
+        }
+
+        if (NativeMethods.GetWindowRect(_hwnd, out var rect))
+        {
+            // Save where it actually is: a drag past the monitor's edge stops at the edge.
+            var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+            var (x, y) = PanelPlacement.OffsetFor(Monitor(), rect.Width, rect.Left, rect.Top, dpi, (int)Math.Round(ShadowMargin * dpi));
+            (_offsetX, _offsetY) = (Math.Round(x), Math.Round(y));
+        }
+
+        PlacementChanged?.Invoke(_offsetX, _offsetY, Scale.ScaleX);
+    }
+
+    /// <summary>
+    /// Moves the window by (<paramref name="dx"/>, <paramref name="dy"/>) physical pixels from where the drag started,
+    /// or resizes it from the dragged corner: the scale follows the cursor along the diagonal, the opposite corner stays
+    /// where it was, and the size stays within <see cref="OverlaySettings.MinScale"/> to <see cref="OverlaySettings.MaxScale"/>.
+    /// </summary>
+    private void DragTo(DragStart start, int dx, int dy)
+    {
+        var w0 = start.Window.Width;
+        var h0 = start.Window.Height;
+        if (start.Kind == OverlayDrag.Move)
+        {
+            (_offsetX, _offsetY) = PanelPlacement.OffsetFor(start.Monitor, w0, start.Window.Left + dx, start.Window.Top + dy, start.Dpi, start.Shadow);
+            Reposition();
+            return;
+        }
+
+        var (scale, to) = PanelPlacement.ResizeFromCorner(
+            new PixelRect(start.Window.Left, start.Window.Top, w0, h0),
+            start.Shadow,
+            start.Scale,
+            left: start.Kind is OverlayDrag.TopLeft or OverlayDrag.BottomLeft,
+            top: start.Kind is OverlayDrag.TopLeft or OverlayDrag.TopRight,
+            dx,
+            dy,
+            OverlaySettings.MinScale,
+            OverlaySettings.MaxScale);
+        (_offsetX, _offsetY) = PanelPlacement.OffsetFor(start.Monitor, to.Width, to.Left, to.Top, start.Dpi, start.Shadow);
+        if (Math.Abs(Scale.ScaleX - scale) > 0.0005)
+        {
+            Scale.ScaleX = Scale.ScaleY = scale;
+            UpdateLayout(); // resize now, so the move below uses the new size
+        }
+
+        Reposition();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -272,7 +402,7 @@ public partial class OverlayWindow : Window
         Pop.BeginAnimation(ScaleTransform.ScaleXProperty, pop, HandoffBehavior.SnapshotAndReplace);
         Pop.BeginAnimation(ScaleTransform.ScaleYProperty, pop, HandoffBehavior.SnapshotAndReplace);
 
-        if (fresh && PanelHost.Visibility == Visibility.Visible)
+        if (fresh && PanelArea.Visibility == Visibility.Visible)
         {
             (PanelHost.Content as IRevealable)?.PlayReveal();
         }

@@ -91,7 +91,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         Columns =
         [
             new("Wins", "Wins", c.Wins), new("Streak", "Streak", c.Streak), new("Peak", "Peak MMR", c.Peak),
-            new("Goals", "Goals", c.Goals), new("Shots", "Shots", c.Shots), new("Assists", "Assists", c.Assists),
+            new("AllTimePeak", "All-time peak", c.AllTimePeak), new("Goals", "Goals", c.Goals), new("Shots", "Shots", c.Shots), new("Assists", "Assists", c.Assists),
             new("Saves", "Saves", c.Saves), new("Mvps", "MVPs", c.Mvps),
         ];
         foreach (var column in Columns)
@@ -152,11 +152,19 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string? _recording;
 
+    /// <summary>Set by dragging the screen (no slider): DIPs from the top-right corner.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PlacementText))]
     private double _offsetX;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PlacementText))]
     private double _offsetY;
+
+    /// <summary>Where the screen is now, in words.</summary>
+    public string PlacementText => OffsetX == 0 && OffsetY == 0
+        ? "Now: top-right corner."
+        : $"Now: moved {Math.Abs(OffsetX):0} px {(OffsetX <= 0 ? "left" : "right")} and {Math.Abs(OffsetY):0} px {(OffsetY >= 0 ? "down" : "up")} from the top-right corner.";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ScaleText))]
@@ -237,7 +245,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         bool Col(string key) => Columns.First(c => c.Key == key).IsOn;
         s.Columns = new StatColumns
         {
-            Wins = Col("Wins"), Streak = Col("Streak"), Peak = Col("Peak"), Goals = Col("Goals"),
+            Wins = Col("Wins"), Streak = Col("Streak"), Peak = Col("Peak"), AllTimePeak = Col("AllTimePeak"), Goals = Col("Goals"),
             Shots = Col("Shots"), Assists = Col("Assists"), Saves = Col("Saves"), Mvps = Col("Mvps"),
         };
         s.ToggleHotkey = ToggleHotkey;
@@ -324,14 +332,26 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ResetPosition()
+    private void ResetPosition() => SetPlacement(0, 0, OverlaySettings.DefaultScale);
+
+    /// <summary>The screen was dragged or resized during the Preview: that becomes the edited position and size.</summary>
+    public void SetPlacement(double offsetX, double offsetY, double scale)
     {
         _suppressLive = true;
-        OffsetX = 0;
-        OffsetY = 0;
-        ScalePercent = 100;
+        OffsetX = Math.Round(offsetX);
+        OffsetY = Math.Round(offsetY);
+        ScalePercent = Math.Round(scale * 100);
         _suppressLive = false;
         LiveApply();
+    }
+
+    /// <summary>The screen was dragged or resized in a match and saved: show it here too, so Save and Cancel keep it.</summary>
+    public void PlacementSaved(double offsetX, double offsetY, double scale)
+    {
+        _original.OffsetX = offsetX;
+        _original.OffsetY = offsetY;
+        _original.Scale = scale;
+        SetPlacement(offsetX, offsetY, scale);
     }
 
     [RelayCommand]

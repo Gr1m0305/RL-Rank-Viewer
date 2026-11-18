@@ -16,6 +16,29 @@
         SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType">
+    <Window.Resources>
+        <!-- A corner grip: drag it to resize the screen. The bracket lights up while the cursor is on it. -->
+        <Style x:Key="CornerGrip" TargetType="Border">
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Background" Value="#01000000" />
+            <Setter Property="local:OverlayHit.IsInteractive" Value="True" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+        </Style>
+        <Style x:Key="CornerBracket" TargetType="Path">
+            <Setter Property="Data" Value="M2,12 L2,5 Q2,2 5,2 L12,2" />
+            <Setter Property="Stroke" Value="{StaticResource AccentBlue}" />
+            <Setter Property="StrokeThickness" Value="2.5" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+            <Setter Property="Opacity" Value="0" />
+            <Style.Triggers>
+                <Trigger Property="local:OverlayHit.IsHovered" Value="True">
+                    <Setter Property="Opacity" Value="1" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
     <!-- The outer margin leaves room for the panel's soft shadow; it is fully transparent and click-through. -->
     <Grid x:Name="Root" Margin="{x:Static local:OverlayWindow.ShadowMarginThickness}" Opacity="0"
           RenderTransformOrigin="0.5,0">
@@ -30,7 +53,29 @@
             </TransformGroup>
         </Grid.RenderTransform>
         <StackPanel>
-            <ContentPresenter x:Name="PanelHost" />
+            <Grid x:Name="PanelArea">
+                <ContentPresenter x:Name="PanelHost" />
+                <!-- Resize from any corner; the opposite corner stays put. The header (in the panel) moves it. -->
+                <Border Style="{StaticResource CornerGrip}" local:OverlayHit.Drag="TopLeft" Cursor="SizeNWSE"
+                        HorizontalAlignment="Left" VerticalAlignment="Top">
+                    <Path Style="{StaticResource CornerBracket}" />
+                </Border>
+                <Border Style="{StaticResource CornerGrip}" local:OverlayHit.Drag="TopRight" Cursor="SizeNESW"
+                        HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <Border.RenderTransform><ScaleTransform ScaleX="-1" /></Border.RenderTransform>
+                    <Path Style="{StaticResource CornerBracket}" />
+                </Border>
+                <Border Style="{StaticResource CornerGrip}" local:OverlayHit.Drag="BottomLeft" Cursor="SizeNESW"
+                        HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                    <Border.RenderTransform><ScaleTransform ScaleY="-1" /></Border.RenderTransform>
+                    <Path Style="{StaticResource CornerBracket}" />
+                </Border>
+                <Border Style="{StaticResource CornerGrip}" local:OverlayHit.Drag="BottomRight" Cursor="SizeNWSE"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                    <Border.RenderTransform><ScaleTransform ScaleX="-1" ScaleY="-1" /></Border.RenderTransform>
+                    <Path Style="{StaticResource CornerBracket}" />
+                </Border>
+            </Grid>
             <!-- Playlist strip (Ctrl+G). Space is reserved so the window does not resize when it appears. -->
             <ContentPresenter x:Name="StripHost" HorizontalAlignment="Center" Margin="0,12,0,0"
                               Opacity="0" Visibility="Hidden" />

@@ -126,7 +126,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <TextBlock Style="{StaticResource Hint}" Margin="0,4,0,0"
-                                   Text="Wins, Goals, Shots, Assists, Saves and MVPs are the player's lifetime totals; Peak MMR and Streak are for the selected playlist. Every stat makes the rows wider." />
+                                   Text="Wins, Goals, Shots, Assists, Saves and MVPs are the player's lifetime totals; Peak MMR (this season) and Streak are for the selected playlist. All-time peak is the player's best rating ever in Ranked Duel, Doubles or Standard; tracker.gg has none for the other playlists, so it isn't shown there. Every stat makes the rows wider." />
                         <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
                                    Text="The pages load in a built-in Microsoft Edge view, straight from tracker.gg. No account or key is needed." />
                     </StackPanel>
@@ -208,30 +208,19 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="12" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="12" />
-                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
-                        <TextBlock Text="Left / right" Style="{StaticResource Label}" />
-                        <Slider Grid.Column="1" Style="{StaticResource SliderStyle}" Minimum="-800" Maximum="800" SmallChange="10" LargeChange="50"
-                                Value="{Binding OffsetX}" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="2" Text="{Binding OffsetX, StringFormat={}{0:0} px}" Style="{StaticResource Label}" HorizontalAlignment="Right"
-                                   Typography.NumeralAlignment="Tabular" />
-                        <TextBlock Grid.Row="2" Text="Up / down" Style="{StaticResource Label}" />
-                        <Slider Grid.Row="2" Grid.Column="1" Style="{StaticResource SliderStyle}" Minimum="-100" Maximum="700" SmallChange="10" LargeChange="50"
-                                Value="{Binding OffsetY}" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding OffsetY, StringFormat={}{0:0} px}" Style="{StaticResource Label}" HorizontalAlignment="Right"
-                                   Typography.NumeralAlignment="Tabular" />
-                        <TextBlock Grid.Row="4" Text="Size" Style="{StaticResource Label}" />
-                        <Slider Grid.Row="4" Grid.Column="1" Style="{StaticResource SliderStyle}" Minimum="{Binding MinScalePercent}" Maximum="{Binding MaxScalePercent}"
-                                SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True"
+                        <TextBlock Grid.ColumnSpan="3" Style="{StaticResource Hint}" Foreground="{StaticResource TextPrimary}"
+                                   Text="Drag the screen's header to move it and drag any corner to resize it, in a match or with Preview on. It starts in the top-right corner of the game's screen." />
+                        <TextBlock Grid.Row="2" Text="Size" Style="{StaticResource Label}" />
+                        <Slider Grid.Row="2" Grid.Column="1" Style="{StaticResource SliderStyle}" Minimum="{Binding MinScalePercent}" Maximum="{Binding MaxScalePercent}"
+                                SmallChange="1" LargeChange="5" TickFrequency="1" IsSnapToTickEnabled="True"
                                 Value="{Binding ScalePercent}" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding ScaleText}" Style="{StaticResource Label}" HorizontalAlignment="Right"
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding ScaleText}" Style="{StaticResource Label}" HorizontalAlignment="Right"
                                    Typography.NumeralAlignment="Tabular" />
-                        <DockPanel Grid.Row="5" Grid.ColumnSpan="3" Margin="0,12,0,0">
-                            <Button DockPanel.Dock="Right" Content="Reset" Style="{StaticResource LinkButton}" Command="{Binding ResetPositionCommand}" />
-                            <TextBlock Text="Measured from the top centre of the game's screen. Turn on Preview to see it move."
-                                       Style="{StaticResource Hint}" />
+                        <DockPanel Grid.Row="3" Grid.ColumnSpan="3" Margin="0,12,0,0">
+                            <Button DockPanel.Dock="Right" Content="Reset to top right" Style="{StaticResource LinkButton}" Command="{Binding ResetPositionCommand}" />
+                            <TextBlock Text="{Binding PlacementText}" Style="{StaticResource Hint}" />
                         </DockPanel>
                     </Grid>
                 </Border>
