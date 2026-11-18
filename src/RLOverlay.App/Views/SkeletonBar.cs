@@ -7,13 +7,14 @@ namespace RLOverlay.App.Views;
 
 /// <summary>
 /// A rounded placeholder bar with a light band sweeping across it. The animation runs only while the bar is visible,
-/// so a hidden overlay costs nothing.
+/// so a hidden overlay costs nothing, and at a low frame rate: each frame redraws the whole layered overlay window.
 /// </summary>
 public sealed class SkeletonBar : Border
 {
     private static readonly Color Base = Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF);
     private static readonly Color Highlight = Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF);
-    private static readonly TimeSpan Period = TimeSpan.FromMilliseconds(1400);
+    private static readonly TimeSpan Period = TimeSpan.FromMilliseconds(1600);
+    private const int FramesPerSecond = 15;
 
     private readonly TranslateTransform _shift = new(-1, 0);
     private bool _running;
@@ -60,6 +61,7 @@ public sealed class SkeletonBar : Border
                 RepeatBehavior = RepeatBehavior.Forever,
                 BeginTime = -phase,
             };
+            Timeline.SetDesiredFrameRate(sweep, FramesPerSecond);
             _shift.BeginAnimation(TranslateTransform.XProperty, sweep);
         }
         else

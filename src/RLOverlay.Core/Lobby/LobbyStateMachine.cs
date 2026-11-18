@@ -9,7 +9,7 @@ namespace RLOverlay.Core.Lobby;
 /// </summary>
 public sealed class LobbyStateMachine
 {
-    /// <summary>A player missing from this many consecutive UpdateState ticks is treated as gone.</summary>
+    /// <summary>A player missing from this many consecutive UpdateState ticks has left (they stay listed as left).</summary>
     public const int MissedTicksBeforeRemoval = 3;
 
     /// <summary>
@@ -104,7 +104,7 @@ public sealed class LobbyStateMachine
         }
 
         _next.Apply(message);
-        if (_next._players.Count >= PlayersForNewGame)
+        if (_next._players.Values.Count(p => !p.Player.HasLeft) >= PlayersForNewGame)
         {
             return Adopt(_next);
         }
@@ -222,10 +222,10 @@ public sealed class LobbyStateMachine
             {
                 entry.MissedTicks = 0;
                 var team = p.TeamNum >= 0 ? p.TeamNum : entry.Player.TeamNum;
-                if (entry.Player.TeamNum != team || entry.Player.Name != name)
+                if (entry.Player.TeamNum != team || entry.Player.Name != name || entry.Player.HasLeft)
                 {
                     var before = entry.Player;
-                    entry.Player = before with { Name = name, TeamNum = team, Id = id };
+                    entry.Player = before with { Name = name, TeamNum = team, Id = id, HasLeft = false };
                     effects.Add(new PlayerChangedEffect(before, entry.Player));
                 }
             }
@@ -235,15 +235,32 @@ public sealed class LobbyStateMachine
             }
         }
 
-        foreach (var entry in _players.Values.Where(e => !seen.Contains(e.Player.Key)).ToList())
+        foreach (var entry in _players.Values.Where(e => !seen.Contains(e.Player.Key) && !e.Player.HasLeft).ToList())
         {
             entry.MissedTicks++;
             if (entry.MissedTicks >= MissedTicksBeforeRemoval)
             {
-                _players.Remove(entry.Player.Key);
-                effects.Add(new PlayerRemovedEffect(entry.Player));
+                MarkLeft(entry, effects);
             }
         }
+    }
+
+    /// <summary>
+    /// A player left mid-match: they stay listed, marked as left, until the next game. Someone who left before their
+    /// team was known never really played in it and is removed.
+    /// </summary>
+    private void MarkLeft(Entry entry, List<LobbyEffect> effects)
+    {
+        if (entry.Player.TeamNum is not (0 or 1))
+        {
+            _players.Remove(entry.Player.Key);
+            effects.Add(new PlayerRemovedEffect(entry.Player));
+            return;
+        }
+
+        var before = entry.Player;
+        entry.Player = before with { HasLeft = true };
+        effects.Add(new PlayerChangedEffect(before, entry.Player));
     }
 
     private void ApplyPresence(PlayerPresenceMessage presence, List<LobbyEffect> effects)
@@ -269,17 +286,25 @@ public sealed class LobbyStateMachine
                 StartMatch(presence.MatchGuid, autoShow: true, effects);
             }
 
-            if (!_players.ContainsKey(key))
+            if (!_players.TryGetValue(key, out var known))
             {
                 AddPlayer(new LobbyPlayer(key, name, PlatformId.Parse(presence.PrimaryId, name), -1), effects);
+            }
+            else if (known.Player.HasLeft)
+            {
+                // Back in the same match.
+                known.MissedTicks = 0;
+                var before = known.Player;
+                known.Player = before with { HasLeft = false };
+                effects.Add(new PlayerChangedEffect(before, known.Player));
             }
 
             return;
         }
 
-        if (_players.Remove(key, out var gone))
+        if (_players.TryGetValue(key, out var gone) && !gone.Player.HasLeft)
         {
-            effects.Add(new PlayerRemovedEffect(gone.Player));
+            MarkLeft(gone, effects);
         }
     }
 

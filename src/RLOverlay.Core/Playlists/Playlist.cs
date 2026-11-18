@@ -10,6 +10,7 @@ public enum Playlist
     Rumble,
     Dropshot,
     SnowDay,
+    Heatseeker,
     Tournament,
     Casual,
 }

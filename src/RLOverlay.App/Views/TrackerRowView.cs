@@ -1,8 +1,10 @@
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
@@ -51,6 +53,12 @@ internal enum TrackerRowState
 /// Sizes here are in the panel's own units; the overlay window scales the whole panel by the user's size setting.
 /// The browser control is drawn at that scale (zoomed by it and shrunk back by the inverse transform), so the page
 /// stays sharp instead of being stretched as a picture.
+/// To keep loading cheap for the game (see <see cref="BrowserTuning"/>), a page waits for a loading turn, loads with
+/// the browser control hidden (nothing is drawn or copied onto the overlay until the row is there) and fetches only
+/// tracker.gg itself. Once the row is cropped it is shown as a still picture taken from the page and the browser
+/// control is hidden again: a visible browser control copies frames onto the overlay all the time, even when nothing
+/// changes, which cost almost half a CPU core for a lobby. The page stays loaded, so switching playlist or stats crops
+/// it again at once and takes a new picture.
 /// </remarks>
 internal sealed class TrackerRowView : Grid, IDisposable
 {
@@ -67,6 +75,9 @@ internal sealed class TrackerRowView : Grid, IDisposable
     private static readonly TimeSpan TilesWait = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan FastPoll = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan SlowPoll = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>A page still loading after this long lets the next one start too (it keeps loading).</summary>
+    private static readonly TimeSpan TurnTimeout = TimeSpan.FromSeconds(8);
     private static readonly Color DefaultBand = Color.FromRgb(0, 21, 56);
 
     private readonly Func<Task<CoreWebView2Environment>> _environment;
@@ -84,6 +95,8 @@ internal sealed class TrackerRowView : Grid, IDisposable
     private readonly Border _band;
     private readonly Canvas _clip;
     private readonly Border _scaler;
+    private readonly Grid _pageHost = new();
+    private readonly Image _snapshot = new() { Stretch = Stretch.Fill, IsHitTestVisible = false, Visibility = Visibility.Collapsed };
     private readonly ScaleTransform _unscale = new(1, 1);
     private readonly StackPanel _bandMessage;
     private readonly SkeletonBar _shimmer;
@@ -100,6 +113,12 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
     private bool _recropPending;
     private bool _disposed;
+    private bool _starting;
+    private string _stateNote = "";
+    private IDisposable? _turn;
+    private readonly CancellationTokenSource _life = new();
+    private int _snapshotVersion;
+    private bool _snapshotStale;
     private DateTime _loadStarted;
     private TrackerCropResult? _lastCrop;
 
@@ -208,7 +227,8 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
         // The band: tracker.gg's own row, shown at its real size (no extra space around it).
         _web = null;
-        _scaler = new Border { LayoutTransform = _unscale };
+        _pageHost.Children.Add(_snapshot);
+        _scaler = new Border { LayoutTransform = _unscale, Child = _pageHost };
         _clip = new Canvas { ClipToBounds = true };
         _clip.Children.Add(_scaler);
         _shimmer = new SkeletonBar { Width = 46, Height = 8, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -240,6 +260,15 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
         _poll = new DispatcherTimer { Interval = FastPoll };
         _poll.Tick += async (_, _) => await PollAsync();
+
+        // A picture can only be taken while the row is on screen; one that was due while hidden is taken on showing.
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible && _snapshotStale && State == TrackerRowState.Cropped)
+            {
+                _ = RefreshSnapshotAsync();
+            }
+        };
 
         Update(player);
         if (sample)
@@ -292,23 +321,47 @@ internal sealed class TrackerRowView : Grid, IDisposable
         ApplySize();
     }
 
-    /// <summary>Name, badge and team (the team can change after joining).</summary>
+    /// <summary>Name, badge, team (the team can change after joining) and whether the player left the match.</summary>
     public void Update(LobbyPlayer player)
     {
         Player = player;
         _name.Text = player.Name;
         _badge.Text = string.Join(" ", player.Id.BadgeText.ToCharArray());
         _badgeBox.Visibility = player.Id.BadgeText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        // Someone who quit stays on the board until the next game, faded and marked.
+        Opacity = player.HasLeft ? 0.55 : 1;
+        ShowNote();
+    }
+
+    /// <summary>The line under the name: "left the match" for a quitter, else what the band is doing.</summary>
+    private void ShowNote()
+    {
+        _note.Text = Player.HasLeft ? "left the match" : _stateNote;
+        _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Starts loading the page (once; later calls do nothing).</summary>
     public async Task StartAsync()
     {
-        if (_url is null || _web is not null || _disposed)
+        if (_url is null || _web is not null || _disposed || _starting)
         {
             return;
         }
 
+        _starting = true;
+        try
+        {
+            await StartCoreAsync();
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    private async Task StartCoreAsync()
+    {
         CoreWebView2Environment environment;
         try
         {
@@ -326,7 +379,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
             return;
         }
 
-        if (_disposed || _web is not null)
+        if (_disposed || _web is not null || !await TakeTurnAsync())
         {
             return;
         }
@@ -336,9 +389,11 @@ internal sealed class TrackerRowView : Grid, IDisposable
             IsHitTestVisible = false,
             Focusable = false,
             DefaultBackgroundColor = System.Drawing.Color.FromArgb(DefaultBand.R, DefaultBand.G, DefaultBand.B),
+            Visibility = Visibility.Hidden, // drawn only once there is a row to show
         };
+        BrowserTuning.FollowVisibility(web, _logger);
         _web = web;
-        _scaler.Child = web;
+        _pageHost.Children.Insert(0, web);
         ApplySize();
 
         try
@@ -371,7 +426,40 @@ internal sealed class TrackerRowView : Grid, IDisposable
         core.NewWindowRequested += (_, e) => e.Handled = true; // no pop-ups or new windows
         core.NavigationStarting += OnNavigationStarting;
         core.NavigationCompleted += OnNavigationCompleted;
+        BrowserTuning.BlockExtras(core, _logger);
         Navigate();
+    }
+
+    /// <summary>Waits for a loading turn (see <see cref="BrowserTuning.MaxLoadingAtOnce"/>); false if the row closed meanwhile.</summary>
+    private async Task<bool> TakeTurnAsync()
+    {
+        if (_turn is not null)
+        {
+            return true;
+        }
+
+        try
+        {
+            var turn = await BrowserTuning.TakeTurnAsync(_life.Token);
+            if (_disposed)
+            {
+                turn.Dispose();
+                return false;
+            }
+
+            _turn = turn;
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    private void ReleaseTurn()
+    {
+        _turn?.Dispose();
+        _turn = null;
     }
 
     /// <summary>The selected playlist changed: crop the already loaded page to that row (no reload).</summary>
@@ -431,6 +519,10 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
         _zoom = zoom;
         ApplySize();
+        if (State == TrackerRowState.Cropped)
+        {
+            _ = RefreshSnapshotAsync(); // the picture was taken at the old size
+        }
     }
 
     public void Reload()
@@ -441,7 +533,16 @@ internal sealed class TrackerRowView : Grid, IDisposable
             return;
         }
 
-        Navigate();
+        _ = ReloadInTurnAsync();
+    }
+
+    private async Task ReloadInTurnAsync()
+    {
+        SetState(TrackerRowState.Loading, "Loading tracker.gg…");
+        if (await TakeTurnAsync() && !_disposed)
+        {
+            Navigate();
+        }
     }
 
     private void Recrop()
@@ -522,6 +623,11 @@ internal sealed class TrackerRowView : Grid, IDisposable
             switch (result.Status)
             {
                 case TrackerCropStatus.Ok:
+                    if (State != TrackerRowState.Cropped)
+                    {
+                        _logger.LogInformation("Overlay: {Player}'s row is in ({Seconds:0.0} s)", Player.Name, (DateTime.UtcNow - _loadStarted).TotalSeconds);
+                    }
+
                     _lastCrop = result;
                     SetBandColour(result.Background);
                     _poll.Stop();
@@ -539,6 +645,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
                     }
 
                     SetState(TrackerRowState.Cropped, "");
+                    _ = RefreshSnapshotAsync();
                     break;
 
                 case TrackerCropStatus.NoRow:
@@ -552,6 +659,11 @@ internal sealed class TrackerRowView : Grid, IDisposable
                     break;
 
                 default:
+                    if (_turn is not null && DateTime.UtcNow - _loadStarted > TurnTimeout)
+                    {
+                        ReleaseTurn(); // slow page: let the next one start as well
+                    }
+
                     if (State == TrackerRowState.Loading && DateTime.UtcNow - _loadStarted > ShowPageAfter)
                     {
                         // Something else is on the page (a browser check, a notice): show it so the user can see it.
@@ -597,12 +709,17 @@ internal sealed class TrackerRowView : Grid, IDisposable
     private void SetState(TrackerRowState state, string text)
     {
         State = state;
+        if (state != TrackerRowState.Loading)
+        {
+            ReleaseTurn(); // done loading (a row, a message or the whole page): the next page may start
+        }
+
         _bandText.Text = text;
         var showsPage = state is TrackerRowState.Cropped or TrackerRowState.ShowingPage;
         _bandMessage.Visibility = showsPage ? Visibility.Collapsed : Visibility.Visible;
         _shimmer.Visibility = state == TrackerRowState.Loading ? Visibility.Visible : Visibility.Collapsed;
         _bandText.FontStyle = state == TrackerRowState.Sample ? FontStyles.Italic : FontStyles.Normal;
-        _note.Text = state switch
+        _stateNote = state switch
         {
             TrackerRowState.Loading => "loading…",
             TrackerRowState.ShowingPage => "waiting for tracker.gg",
@@ -612,11 +729,21 @@ internal sealed class TrackerRowView : Grid, IDisposable
             TrackerRowState.Sample => "preview",
             _ => "",
         };
-        _note.Visibility = _note.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        ShowNote();
         _reload.Visibility = _url is not null && state != TrackerRowState.Loading ? Visibility.Visible : Visibility.Collapsed;
         _cover.Visibility = showsPage ? Visibility.Collapsed : Visibility.Visible;
         if (_web is not null)
         {
+            // Hidden while there is nothing to show: a hidden page isn't drawn or copied onto the overlay. A cropped row
+            // is shown as a picture (RefreshSnapshotAsync); a whole page (a browser check) stays live so it can be used.
+            if (state != TrackerRowState.Cropped)
+            {
+                _snapshotVersion++;
+                _snapshotStale = false;
+                _snapshot.Visibility = Visibility.Collapsed;
+                _web.Visibility = state == TrackerRowState.ShowingPage ? Visibility.Visible : Visibility.Hidden;
+            }
+
             // The cropped row is a picture; a whole page (e.g. a browser check) can be clicked.
             _web.IsHitTestVisible = state == TrackerRowState.ShowingPage;
             OverlayHit.SetIsInteractive(_web, state == TrackerRowState.ShowingPage);
@@ -624,6 +751,76 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
         ApplySize();
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Shows the freshly cropped row live for a moment, takes a picture of it, then shows the picture and hides the
+    /// browser control again (see the remarks above). A newer crop or state change cancels an older one.
+    /// </summary>
+    private async Task RefreshSnapshotAsync()
+    {
+        var version = ++_snapshotVersion;
+        if (_web is not { } web || web.CoreWebView2 is not { } core || State != TrackerRowState.Cropped)
+        {
+            return;
+        }
+
+        bool Stale() => version != _snapshotVersion || _disposed || State != TrackerRowState.Cropped;
+
+        web.Visibility = Visibility.Visible;
+        if (!IsVisible)
+        {
+            // Off screen (the panel is hidden): nothing would be drawn to take a picture of. Done when it shows.
+            _snapshotStale = true;
+            _snapshot.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _snapshotStale = false;
+        try
+        {
+            await Task.Delay(150);
+            if (Stale())
+            {
+                return;
+            }
+
+            _snapshot.Visibility = Visibility.Collapsed; // the new crop, live
+            await Task.Delay(350);
+            if (Stale())
+            {
+                return;
+            }
+
+            using var png = new MemoryStream();
+            await core.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, png);
+            if (Stale() || png.Length == 0)
+            {
+                return;
+            }
+
+            png.Position = 0;
+            var picture = new BitmapImage();
+            picture.BeginInit();
+            picture.CacheOption = BitmapCacheOption.OnLoad;
+            picture.StreamSource = png;
+            picture.EndInit();
+            picture.Freeze();
+            _snapshot.Source = picture;
+            _snapshot.Visibility = Visibility.Visible;
+            await Task.Delay(50); // let the picture reach the screen before the live view goes
+            if (!Stale())
+            {
+                web.Visibility = Visibility.Hidden;
+                _logger.LogDebug("Overlay: picture of {Player}'s row ({Width}x{Height})", Player.Name, picture.PixelWidth, picture.PixelHeight);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException or ObjectDisposedException
+            or NotSupportedException or FileFormatException)
+        {
+            // No picture: the live view simply stays.
+            _logger.LogDebug(ex, "Overlay: no picture of {Player}'s row; showing it live", Player.Name);
+        }
     }
 
     private void ApplySize()
@@ -679,6 +876,9 @@ internal sealed class TrackerRowView : Grid, IDisposable
             {
                 _web.ZoomFactor = pageZoom;
             }
+
+            _snapshot.Width = _web.Width;
+            _snapshot.Height = _web.Height;
         }
     }
 
@@ -758,6 +958,8 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
         _disposed = true;
         _poll.Stop();
+        _life.Cancel();
+        ReleaseTurn();
         if (_url is not null)
         {
             DependencyPropertyDescriptor.FromProperty(OverlayHit.IsHoveredProperty, typeof(Border)).RemoveValueChanged(_nameHit, OnNameHover);
@@ -771,7 +973,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
                 core.NavigationCompleted -= OnNavigationCompleted;
             }
 
-            _scaler.Child = null;
+            _pageHost.Children.Remove(web);
             web.Dispose();
             _web = null;
         }

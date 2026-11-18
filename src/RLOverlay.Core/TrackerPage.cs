@@ -108,10 +108,39 @@ public static class TrackerPage
         Playlist.Rumble => "Rumble",
         Playlist.Dropshot => "Dropshot",
         Playlist.SnowDay => "Snowday",
+        Playlist.Heatseeker => "Heatseeker",
         Playlist.Tournament => "Tournament Matches",
         Playlist.Casual => "Casual",
         _ => "",
     };
+
+    /// <summary>Sites a tracker.gg page needs: its own pages, images, data and fonts, and Cloudflare's browser check.</summary>
+    private static readonly string[] AllowedHosts =
+    [
+        "tracker.network", "tracker.gg", "trackercdn.com", "fonts.googleapis.com", "fonts.gstatic.com", "challenges.cloudflare.com",
+    ];
+
+    /// <summary>
+    /// May the embedded page load this? Only tracker.gg's own sites (and subdomains), its web fonts and Cloudflare's
+    /// browser check. Ads, video players, analytics and trackers are refused: they never showed on the overlay, and they
+    /// were most of what loading a lobby cost. Non-web addresses (data:, blob:) are left alone.
+    /// </summary>
+    public static bool AllowsRequest(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
+        {
+            return true;
+        }
+
+        var host = uri.Host.TrimEnd('.');
+        return AllowedHosts.Any(allowed => host.Equals(allowed, StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith("." + allowed, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>
     /// A script for <c>ExecuteScriptAsync</c> that crops the page to <paramref name="label"/>'s row plus what
@@ -332,6 +361,7 @@ public static class TrackerPage
             'width:max-content!important;min-width:0!important;background:' + bg + '!important}' +
             '#rlo-crop table{table-layout:auto!important;width:max-content!important;min-width:0!important;margin:0!important}' +
             '#rlo-crop td{white-space:nowrap!important}' +
+            '#rlo-crop,#rlo-crop *{animation:none!important;transition:none!important}' +
             '#rlo-crop .stats{display:flex!important;flex-wrap:nowrap!important;margin:0!important;padding:0!important}' +
             '#rlo-crop .stat{flex:none!important;width:max-content!important;min-width:0!important;max-width:none!important;margin:0!important}' +
             '#rlo-crop .ratings-grid{display:block!important;margin:0!important;padding:0!important}' +

@@ -57,10 +57,24 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     {
         if (s_environment is null || s_environment.IsFaulted || s_environment.IsCanceled)
         {
-            s_environment = CoreWebView2Environment.CreateAsync(null, AppPaths.WebViewDataDir);
+            // Pages load out of sight (see TrackerRowView), so Chromium mustn't slow hidden pages down; their priority is
+            // set by BrowserTuning instead.
+            var options = new CoreWebView2EnvironmentOptions
+            {
+                AdditionalBrowserArguments = "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows",
+            };
+            s_environment = CoreWebView2Environment.CreateAsync(null, AppPaths.WebViewDataDir, options);
         }
 
         return s_environment;
+    }
+
+    /// <summary>The shared browser profile, with its processes put below normal priority (see <see cref="BrowserTuning"/>).</summary>
+    private async Task<CoreWebView2Environment> TunedEnvironment()
+    {
+        var environment = await Environment();
+        BrowserTuning.LowerPriority(environment, _logger);
+        return environment;
     }
 
     /// <summary>Rows for tests and diagnostics.</summary>
@@ -163,8 +177,9 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     }
 
     /// <summary>
-    /// The roster changed. Players who left are removed (their page is closed); new players get a row whose page starts
-    /// loading right away, so it's ready by the time anyone looks.
+    /// The roster changed. Players no longer in it (a new match) are removed and their page closed; players who left the
+    /// match stay, marked as left; new players get a row whose page starts loading right away, so it's ready by the time
+    /// anyone looks.
     /// </summary>
     private void Rebuild()
     {
@@ -199,7 +214,7 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
             }
             else
             {
-                row = new TrackerRowView(player, _vm.RowLabel, _vm.CropOptions, _zoom, _vm.IsSample, Environment, _openProfile, _logger);
+                row = new TrackerRowView(player, _vm.RowLabel, _vm.CropOptions, _zoom, _vm.IsSample, TunedEnvironment, _openProfile, _logger);
                 row.Changed += OnRowChanged;
                 _rows[player.Key] = row;
                 _sampleRows[player.Key] = _vm.IsSample;
@@ -231,7 +246,9 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
         var blue = players.Where(p => p.TeamNum == 0).ToList();
         var orange = players.Where(p => p.TeamNum == 1).ToList();
         var other = players.Where(p => p.TeamNum is not (0 or 1)).ToList();
-        var teamSize = _vm!.TeamSize(blue.Count, orange.Count);
+        var blueIn = blue.Count(p => !p.HasLeft);
+        var orangeIn = orange.Count(p => !p.HasLeft);
+        var teamSize = _vm!.TeamSize(blueIn, orangeIn);
         var phaseKnown = _vm.Phase != MatchPhase.Idle;
 
         void Group(TeamBlock block, List<LobbyPlayer> members, string count)
@@ -259,8 +276,8 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
             }
         }
 
-        Group(_blue, blue, phaseKnown ? $"{blue.Count} / {Math.Max(teamSize, blue.Count)}" : "");
-        Group(_orange, orange, phaseKnown ? $"{orange.Count} / {Math.Max(teamSize, orange.Count)}" : "");
+        Group(_blue, blue, phaseKnown ? TeamCount(blueIn, blue.Count - blueIn, teamSize) : "");
+        Group(_orange, orange, phaseKnown ? TeamCount(orangeIn, orange.Count - orangeIn, teamSize) : "");
         Group(_other, other, "");
 
         while (RowsHost.RowDefinitions.Count < heights.Count)
@@ -280,6 +297,10 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
 
         RowsHost.Margin = heights.Count > 0 ? new Thickness(0) : new Thickness(0, 0, 0, -8);
     }
+
+    /// <summary>"2 / 2", or "2 / 2 · 1 left" when someone quit.</summary>
+    private static string TeamCount(int playing, int left, int teamSize) =>
+        $"{playing} / {Math.Max(teamSize, playing)}" + (left > 0 ? $" · {left} left" : "");
 
     private void OnRowChanged()
     {

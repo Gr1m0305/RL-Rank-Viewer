@@ -16,6 +16,7 @@ public static class PlaylistCatalog
         new(Playlist.Rumble, "Rumble", "3v3", "Rumble", "Rumble", 3, true),
         new(Playlist.Dropshot, "Dropshot", "3v3", "Dropshot", "Dropshot", 3, true),
         new(Playlist.SnowDay, "Snow Day", "3v3", "Snow Day", "Snow Day", 3, true),
+        new(Playlist.Heatseeker, "Heatseeker", "Extra mode", "Heatseeker", "Heatseeker", null, true),
         new(Playlist.Tournament, "Tournaments", "Tournament MMR", "Tourney", "Tournaments", null, true),
         new(Playlist.Casual, "Casual", "Casual MMR", "Casual", "Casual", null, false),
     ];
@@ -32,6 +33,7 @@ public static class PlaylistCatalog
         28 => Playlist.Rumble,
         29 => Playlist.Dropshot,
         30 => Playlist.SnowDay,
+        38 or 43 or 63 or 64 => Playlist.Heatseeker,
         22 or 34 => Playlist.Tournament,
         1 or 2 or 3 or 4 or 15 or 17 or 18 or 23 => Playlist.Casual,
         _ => null,
@@ -47,6 +49,7 @@ public static class PlaylistCatalog
         Playlist.Rumble => 28,
         Playlist.Dropshot => 29,
         Playlist.SnowDay => 30,
+        Playlist.Heatseeker => 43,
         Playlist.Tournament => 34,
         Playlist.Casual => 0,
         _ => -1,
@@ -56,7 +59,7 @@ public static class PlaylistCatalog
     public static int? TeamSizeForGameId(int playlistId) => playlistId switch
     {
         1 or 10 => 1,
-        2 or 11 or 17 or 27 => 2,
+        2 or 11 or 17 or 27 or 43 => 2,
         3 or 12 or 13 or 15 or 18 or 23 or 28 or 29 or 30 => 3,
         4 => 4,
         _ => null,

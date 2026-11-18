@@ -168,8 +168,8 @@ public sealed partial class PanelViewModel : ObservableObject
         Title = info.Title;
         Subtitle = info.Subtitle + (ShowSwitchedNote ? $" · switched with {string.Join("+", CycleKeys)}" : " · tracker.gg");
 
-        var blue = _players.Count(p => p.TeamNum == 0);
-        var orange = _players.Count(p => p.TeamNum == 1);
+        var blue = _players.Count(p => p.TeamNum == 0 && !p.HasLeft);
+        var orange = _players.Count(p => p.TeamNum == 1 && !p.HasLeft);
         var teamSize = MatchTeamSize ?? Math.Max(1, Math.Max(blue, orange));
         var expected = Phase == MatchPhase.PreKickoff ? teamSize * 2 : 0;
         IsWaiting = Phase != MatchPhase.Idle && blue + orange < expected;

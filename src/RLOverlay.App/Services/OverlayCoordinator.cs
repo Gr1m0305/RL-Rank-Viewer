@@ -17,10 +17,14 @@ internal sealed class OverlayCoordinator : IDisposable
 {
     public static readonly TimeSpan StripDuration = TimeSpan.FromMilliseconds(1500);
 
+    /// <summary>The screen holds still this long after it starts hiding (its fade-out), then follows the lobby again.</summary>
+    private static readonly TimeSpan HoldWhileHiding = TimeSpan.FromMilliseconds(450);
+
     private readonly PanelViewModel _vm;
     private readonly OverlayWindow _window;
     private readonly ILogger _logger;
     private readonly DispatcherTimer _stripTimer;
+    private readonly DispatcherTimer _holdTimer;
     private LobbyStateMachine _lobby = new();
     private OverlaySettings _settings;
     private bool _userCycled;
@@ -37,6 +41,8 @@ internal sealed class OverlayCoordinator : IDisposable
         _logger = logger;
         _stripTimer = new DispatcherTimer { Interval = StripDuration };
         _stripTimer.Tick += (_, _) => HideStrip();
+        _holdTimer = new DispatcherTimer { Interval = HoldWhileHiding };
+        _holdTimer.Tick += (_, _) => FollowLobbyWhileHidden();
         _vm.ApplySettings(settings);
         _vm.Playlist = ResolveInitialPlaylist();
     }
@@ -120,9 +126,13 @@ internal sealed class OverlayCoordinator : IDisposable
         LobbyChanged?.Invoke();
     }
 
-    /// <summary>Shows or hides the panel; the view model is frozen while hidden so nothing changes during the fade.</summary>
+    /// <summary>
+    /// Shows or hides the panel. While it fades out the view model holds still, so nothing changes mid-fade; after that
+    /// it follows the lobby again, out of sight (see <see cref="FollowLobbyWhileHidden"/>).
+    /// </summary>
     private void ShowPanel(bool visible)
     {
+        _holdTimer.Stop();
         if (visible)
         {
             _vm.IsFrozen = false;
@@ -132,9 +142,27 @@ internal sealed class OverlayCoordinator : IDisposable
         else
         {
             _vm.IsFrozen = true;
+            _holdTimer.Start();
         }
 
         _window.SetPanelVisible(visible);
+    }
+
+    /// <summary>
+    /// The fade-out is over: the hidden screen follows the lobby again. Pages of players who are gone (a new match, the
+    /// game closed) are closed instead of running on unseen, and players who join after kickoff start loading.
+    /// </summary>
+    private void FollowLobbyWhileHidden()
+    {
+        _holdTimer.Stop();
+        if (_window.PanelOn)
+        {
+            return;
+        }
+
+        _vm.IsFrozen = false;
+        _vm.Phase = _lobby.Phase;
+        _vm.Refresh();
     }
 
     private void ApplyEffects(IReadOnlyList<LobbyEffect> effects)
@@ -219,5 +247,9 @@ internal sealed class OverlayCoordinator : IDisposable
         }
     }
 
-    public void Dispose() => _stripTimer.Stop();
+    public void Dispose()
+    {
+        _stripTimer.Stop();
+        _holdTimer.Stop();
+    }
 }

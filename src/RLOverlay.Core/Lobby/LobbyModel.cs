@@ -33,7 +33,11 @@ public enum PanelChangeReason
 /// <summary>A player in the current match.</summary>
 /// <param name="Key">Stable roster key: the normalised PrimaryId, or <c>name:&lt;Name&gt;</c> for bots / id-less players.</param>
 /// <param name="TeamNum">0 = Blue, 1 = Orange, -1 = not known yet (joined, no UpdateState tick seen).</param>
-public sealed record LobbyPlayer(string Key, string Name, PlatformId Id, int TeamNum)
+/// <param name="HasLeft">
+/// The player left the match. They stay listed (marked as left) until the next game, so someone who quit early can
+/// still be looked up; coming back clears it.
+/// </param>
+public sealed record LobbyPlayer(string Key, string Name, PlatformId Id, int TeamNum, bool HasLeft = false)
 {
     public static string KeyFor(string? primaryId, string name)
     {
@@ -49,9 +53,16 @@ public sealed record MatchStartedEffect(string? MatchGuid, MatchPhase Phase) : L
 
 public sealed record PlayerAddedEffect(LobbyPlayer Player) : LobbyEffect;
 
+/// <summary>
+/// A player who joined and left before their team was known (they were never really in the match). Players who were
+/// in the match aren't removed when they leave: they change to <see cref="LobbyPlayer.HasLeft"/>.
+/// </summary>
 public sealed record PlayerRemovedEffect(LobbyPlayer Player) : LobbyEffect;
 
-/// <summary>Team or display name changed (e.g. team learned from the first UpdateState after PlayerJoined).</summary>
+/// <summary>
+/// Team, display name or left/back changed (e.g. team learned from the first UpdateState after PlayerJoined, or the
+/// player quit).
+/// </summary>
 public sealed record PlayerChangedEffect(LobbyPlayer Before, LobbyPlayer After) : LobbyEffect;
 
 public sealed record PanelVisibilityEffect(bool Visible, PanelChangeReason Reason) : LobbyEffect;

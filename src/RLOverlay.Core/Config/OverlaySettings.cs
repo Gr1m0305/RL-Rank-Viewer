@@ -13,10 +13,11 @@ public sealed class OverlaySettings
     public const double DefaultScale = 0.85;
 
     /// <summary>
-    /// 3 = top-right placement and the smaller default size, Follow the match's playlist off; 2 = the tracker.gg screen
-    /// (Wins, Streak and Peak MMR ticked by default). Older files are upgraded by <see cref="Upgrade"/> when loaded.
+    /// 4 = Heatseeker playlist and automatic updates; 3 = top-right placement and the smaller default size, Follow the
+    /// match's playlist off; 2 = the tracker.gg screen (Wins, Streak and Peak MMR ticked by default). Older files are
+    /// upgraded by <see cref="Upgrade"/> when loaded.
     /// </summary>
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
@@ -48,6 +49,11 @@ public sealed class OverlaySettings
 
     /// <summary>Show a short notice when Rocket League starts and the overlay switches on.</summary>
     public bool NotifyWhenGameStarts { get; set; } = true;
+
+    /// <summary>
+    /// Check GitHub for new releases, download them in the background and install them while Rocket League is closed.
+    /// </summary>
+    public bool UpdateAutomatically { get; set; } = true;
 
     /// <summary>Overrides the Stats API port read from the game's ini (null = use the ini, default 49123).</summary>
     public int? StatsApiPort { get; set; }
@@ -94,7 +100,8 @@ public sealed class OverlaySettings
     /// Brings settings saved by an older version up to date. Version 1 (the RapidAPI panel) had every stat column on
     /// by default; the tracker.gg screen starts with just Wins, Streak and Peak MMR, since each stat widens the rows.
     /// Version 2 measured the position from the top centre: the screen now starts in the top-right corner at the new
-    /// default size, and Follow the match's playlist starts off.
+    /// default size, and Follow the match's playlist starts off. Version 3 had no Heatseeker playlist: it joins the
+    /// Ctrl+G cycle like the others.
     /// </summary>
     public OverlaySettings Upgrade()
     {
@@ -109,6 +116,11 @@ public sealed class OverlaySettings
             OffsetY = 0;
             Scale = DefaultScale;
             FollowMatchPlaylist = false;
+        }
+
+        if (SchemaVersion < 4 && EnabledPlaylists is { Count: > 0 } enabled && !enabled.Contains(Playlist.Heatseeker))
+        {
+            enabled.Add(Playlist.Heatseeker);
         }
 
         SchemaVersion = Math.Max(SchemaVersion, CurrentSchemaVersion);

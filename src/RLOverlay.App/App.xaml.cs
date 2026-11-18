@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Windows;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 using RLOverlay.App.Overlay;
@@ -61,10 +63,22 @@ public partial class App : Application
 
     private bool HotkeysUngated => _args.UngatedHotkeys || _args.Demo;
 
+    static App()
+    {
+        // The overlay is a layered (per-pixel transparent) window: every animation frame is drawn and copied to the
+        // screen in full, which competes with the game. 30 frames a second is plenty for fades and the loading shimmer.
+        Timeline.DesiredFrameRateProperty.OverrideMetadata(typeof(Timeline), new FrameworkPropertyMetadata { DefaultValue = 30 });
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         _args = AppArgs.Parse(e.Args);
+        if (_args.DataDir is { } dataDir)
+        {
+            AppPaths.UseRoot(Path.GetFullPath(dataDir));
+        }
+
         SetUpLogging();
         _log.LogInformation("{App} {Version} starting (args: {Args})", AppInfo.Name, AppInfo.Version, string.Join(' ', e.Args));
         foreach (var unknown in _args.Unknown)
@@ -118,6 +132,18 @@ public partial class App : Application
             }
 
             ListenForSecondLaunch();
+        }
+
+        // Rocket League comes first: the overlay (and the browsers it starts, see BrowserTuning) only gets the CPU the game
+        // leaves free.
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            self.PriorityClass = ProcessPriorityClass.BelowNormal;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            _log.LogDebug(ex, "Could not lower the process priority");
         }
 
         _store = new SettingsStore(AppPaths.SettingsFile, LoggerFactory.CreateLogger<SettingsStore>());

@@ -53,6 +53,15 @@ internal sealed record AppArgs
     /// </summary>
     public string? SetupSandbox { get; init; }
 
+    /// <summary>Testing: keep settings, logs, downloads and the browser profile in this folder.</summary>
+    public string? DataDir { get; init; }
+
+    /// <summary>Testing: read releases from this address (a GitHub-style "latest release" JSON) instead of GitHub.</summary>
+    public string? UpdateFeed { get; init; }
+
+    /// <summary>Never look for updates.</summary>
+    public bool NoUpdateCheck { get; init; }
+
     public IReadOnlyList<string> Unknown { get; init; } = [];
 
     public static AppArgs Parse(IReadOnlyList<string> args)
@@ -111,6 +120,15 @@ internal sealed record AppArgs
                     break;
                 case "--enable-stats-api":
                     result = result with { EnableStatsApi = true };
+                    break;
+                case "--data-dir":
+                    result = result with { DataDir = Next() };
+                    break;
+                case "--update-feed":
+                    result = result with { UpdateFeed = Next() };
+                    break;
+                case "--no-update-check":
+                    result = result with { NoUpdateCheck = true };
                     break;
                 default:
                     unknown.Add(arg);
