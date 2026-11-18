@@ -35,6 +35,16 @@ public interface ISettingsHost
     Task<StatsApiEnableOutcome> EnableStatsApiAsync();
 
     void OpenFolder(string path);
+
+    /// <summary>What the update checker last found.</summary>
+    UpdateState UpdateState { get; }
+
+    event Action? UpdateStateChanged;
+
+    Task CheckForUpdatesAsync();
+
+    /// <summary>Installs the downloaded update now (closes the settings window; the overlay restarts).</summary>
+    void InstallUpdate();
 }
 
 public sealed partial class PlaylistOption(Playlist playlist, string label, bool isEnabled) : ObservableObject
@@ -108,7 +118,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         _offsetY = _original.OffsetY;
         _scalePercent = Math.Round(_original.Scale * 100);
         _notifyWhenGameStarts = _original.NotifyWhenGameStarts;
+        _updateAutomatically = _original.UpdateAutomatically;
         _runAtStartup = host.RunAtStartup;
+        ShowUpdateState();
+        host.UpdateStateChanged += OnUpdateStateChanged;
         _portText = _original.StatsApiPort?.ToString(CultureInfo.InvariantCulture) ?? "";
         RefreshStatsApi();
 
@@ -177,6 +190,23 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _runAtStartup;
+
+    [ObservableProperty]
+    private bool _updateAutomatically;
+
+    [ObservableProperty]
+    private string _updateText = "";
+
+    /// <summary>"Install 0.5.1 now" when an update is downloaded, else null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUpdateReady))]
+    private string? _installUpdateText;
+
+    public bool HasUpdateReady => InstallUpdateText is not null;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CheckForUpdatesCommand))]
+    private bool _canCheckForUpdates;
 
     [ObservableProperty]
     private string _portText;
@@ -254,6 +284,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.OffsetY = Math.Round(OffsetY);
         s.Scale = Math.Round(ScalePercent) / 100;
         s.NotifyWhenGameStarts = NotifyWhenGameStarts;
+        s.UpdateAutomatically = UpdateAutomatically;
         s.StatsApiPort = int.TryParse(PortText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) ? port : null;
         return s.Normalize();
     }
@@ -313,6 +344,28 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         StopRecording();
         EndPreview();
+        _host.UpdateStateChanged -= OnUpdateStateChanged;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCheckForUpdates))]
+    private Task CheckForUpdates() => _host.CheckForUpdatesAsync();
+
+    [RelayCommand]
+    private void InstallUpdate()
+    {
+        StopRecording();
+        EndPreview();
+        _host.InstallUpdate();
+    }
+
+    private void OnUpdateStateChanged() => ShowUpdateState();
+
+    private void ShowUpdateState()
+    {
+        var state = _host.UpdateState;
+        UpdateText = state.Text;
+        InstallUpdateText = state.ReadyVersion is { } version ? $"Install {version} now" : null;
+        CanCheckForUpdates = state.CanCheck;
     }
 
     [RelayCommand]

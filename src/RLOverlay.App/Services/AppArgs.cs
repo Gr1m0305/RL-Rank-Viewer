@@ -47,6 +47,12 @@ internal sealed record AppArgs
     /// <summary>With <see cref="Setup"/> / <see cref="Uninstall"/>: no windows, default choices.</summary>
     public bool Quiet { get; init; }
 
+    /// <summary>With <see cref="Quiet"/> setup: start the installed app when done (updates use this).</summary>
+    public bool LaunchWhenDone { get; init; }
+
+    /// <summary>Setup first waits (up to 20 s) for this process to exit: the copy being updated.</summary>
+    public int? WaitForProcess { get; init; }
+
     /// <summary>
     /// Testing only: setup/uninstall put the install folder, shortcuts and registry entries under this folder and a
     /// scratch registry key instead of the real locations.
@@ -101,6 +107,16 @@ internal sealed record AppArgs
                     break;
                 case "--quiet":
                     result = result with { Quiet = true };
+                    break;
+                case "--launch":
+                    result = result with { LaunchWhenDone = true };
+                    break;
+                case "--wait-for":
+                    if (int.TryParse(Next(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid) && pid > 0)
+                    {
+                        result = result with { WaitForProcess = pid };
+                    }
+
                     break;
                 case "--setup-sandbox":
                     result = result with { SetupSandbox = Next() };

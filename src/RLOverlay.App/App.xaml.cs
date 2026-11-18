@@ -11,6 +11,7 @@ using RLOverlay.App.ViewModels;
 using RLOverlay.App.Views;
 using RLOverlay.Core.Config;
 using RLOverlay.Core.StatsApi;
+using RLOverlay.Core.Updates;
 using Serilog;
 using Serilog.Extensions.Logging;
 
@@ -18,8 +19,8 @@ namespace RLOverlay.App;
 
 /// <summary>
 /// Application entry and composition root (no DI container): logging, settings, Stats API client or demo feed, lobby
-/// coordinator, overlay window with the tracker.gg screen, hotkeys, game-window tracker, tray icon and settings window
-/// (the <see cref="ISettingsHost"/> side lives in App.Settings.cs).
+/// coordinator, overlay window with the tracker.gg screen, hotkeys, game-window tracker, tray icon, updater and settings
+/// window (the <see cref="ISettingsHost"/> side lives in App.Settings.cs).
 /// </summary>
 public partial class App : Application
 {
@@ -53,6 +54,7 @@ public partial class App : Application
     private StatsApiSetup? _setup;
     private StartupRegistration? _startup;
     private TrayIconService? _tray;
+    private UpdateService? _updates;
     private DispatcherTimer? _noticeTimer;
     private DateTime? _gameRunningSince;
     private bool _toldFullscreen;
@@ -154,6 +156,7 @@ public partial class App : Application
         StartDataSource();
         CreateTray();
         StartNotices();
+        StartUpdates();
 
         if (!_settings.FirstRunCompleted && !_args.Demo)
         {
@@ -473,6 +476,24 @@ public partial class App : Application
         : _tracker?.IsGameRunning == true ? $"waiting for the Stats API (port {_port})"
         : $"waiting for Rocket League (port {_port})";
 
+    /// <summary>
+    /// GitHub release checks (see <see cref="UpdateService"/>). Demo and test (--port) runs don't check unless they name
+    /// a test feed with --update-feed (which also checks after a few seconds instead of a minute).
+    /// </summary>
+    private void StartUpdates()
+    {
+        Uri? testFeed = _args.UpdateFeed is { } address && Uri.TryCreate(address, UriKind.Absolute, out var parsed) ? parsed : null;
+        var testRun = _args.Demo || _args.Port is not null;
+        var enabled = !_args.NoUpdateCheck && (!testRun || testFeed is not null);
+        var options = new UpdateOptions(testFeed ?? UpdateFeed.LatestRelease, enabled, _args.SetupSandbox, _args.DataDir);
+        _updates = new UpdateService(options, () => _settings.UpdateAutomatically, IsQuietMoment,
+            (title, text) => _tray?.Notify(title, text), () => Shutdown(), LoggerFactory.CreateLogger<UpdateService>());
+        _updates.Start(testFeed is not null ? TimeSpan.FromSeconds(5) : TimeSpan.FromMinutes(1));
+    }
+
+    /// <summary>Nothing going on that an update would interrupt: the game is closed, no Preview, settings closed.</summary>
+    private bool IsQuietMoment() => _tracker?.IsGameRunning != true && _coordinator?.IsPreviewing != true && _settingsWindow is null;
+
     /// <summary>One-off tips: exclusive fullscreen, and a running game whose Stats API never answers.</summary>
     private void StartNotices()
     {
@@ -545,6 +566,7 @@ public partial class App : Application
         _log.LogInformation("Exiting");
         _shutdown.Cancel();
         _noticeTimer?.Stop();
+        _updates?.Dispose();
         _settingsWindow?.Close();
         StopPreviewFeed();
         _feed?.Dispose();

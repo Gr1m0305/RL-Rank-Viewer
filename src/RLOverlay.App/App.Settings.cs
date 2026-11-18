@@ -180,6 +180,35 @@ public partial class App : ISettingsHost
         UpdateTrayStatus();
     }
 
+    UpdateState ISettingsHost.UpdateState => _updates?.State ?? UpdateState.Off;
+
+    event Action? ISettingsHost.UpdateStateChanged
+    {
+        add
+        {
+            if (_updates is not null)
+            {
+                _updates.StateChanged += value;
+            }
+        }
+
+        remove
+        {
+            if (_updates is not null)
+            {
+                _updates.StateChanged -= value;
+            }
+        }
+    }
+
+    Task ISettingsHost.CheckForUpdatesAsync() => _updates?.CheckAsync() ?? Task.CompletedTask;
+
+    void ISettingsHost.InstallUpdate()
+    {
+        _settingsWindow?.Close(); // its edits are saved or dropped like any close; the overlay restarts
+        _updates?.InstallNow();
+    }
+
     (string Summary, IReadOnlyList<StatsApiFileStatus> Files) ISettingsHost.StatsApiStatus()
     {
         var installs = _setup!.FindInstalls();

@@ -50,4 +50,18 @@ internal sealed class SampleSettingsHost : ISettingsHost
     public void OpenFolder(string path)
     {
     }
+
+    public UpdateState UpdateState { get; } = new($"You have the latest version ({AppInfo.Version}). Last checked at 18:42.", null, true);
+
+    public event Action? UpdateStateChanged
+    {
+        add { }
+        remove { }
+    }
+
+    public Task CheckForUpdatesAsync() => Task.CompletedTask;
+
+    public void InstallUpdate()
+    {
+    }
 }

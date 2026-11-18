@@ -57,6 +57,9 @@ public sealed partial class SetupViewModel : ObservableObject
 
     public bool IsUninstall { get; }
 
+    /// <summary>The installed exe, once setup has run.</summary>
+    public string? InstalledExe => _installedExe;
+
     public bool IsUpdate => !IsUninstall && _existing is not null;
 
     public string Title =>
