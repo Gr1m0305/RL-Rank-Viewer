@@ -30,7 +30,9 @@ internal sealed record UpdateOptions(Uri Feed, bool Enabled, string? SetupSandbo
 /// GitHub lists it, and that it is this app at that version). The installed copy then installs it by itself the next
 /// time nothing is going on (Rocket League closed, no Preview, settings closed): setup runs quietly, replaces the exe
 /// and starts the new version, which says so in a notice. With "Update automatically" off, or for a copy that isn't
-/// the installed one, a notice says the update is ready and Settings → General installs it.
+/// the installed one, a notice says the update is ready and Settings → General installs it. An update installed from
+/// the settings window opens it again in the new version (see <see cref="UpdateMarker"/>); if setup fails, it starts
+/// the old copy again instead.
 /// </summary>
 /// <remarks>
 /// Only GitHub's API and this repository's release files are contacted, with a plain "RLOverlay/version" User-Agent;
@@ -42,7 +44,6 @@ internal sealed class UpdateService : IDisposable
     private static readonly TimeSpan InstallCheckInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan FeedTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(15);
-    private const string UpdatedFromFile = "updated-from.txt";
 
     private static readonly HttpClient s_http = CreateClient();
 
@@ -51,6 +52,7 @@ internal sealed class UpdateService : IDisposable
     private readonly Func<bool> _isQuietMoment;
     private readonly Action<string, string> _notify;
     private readonly Action _quit;
+    private readonly Action _reopenSettings;
     private readonly ILogger _logger;
     private readonly DispatcherTimer _checkTimer = new();
     private readonly DispatcherTimer _installTimer = new() { Interval = InstallCheckInterval };
@@ -64,14 +66,20 @@ internal sealed class UpdateService : IDisposable
     private bool _installing;
     private bool _disposed;
 
+    // What the note left by the copy before this one said (see AnnounceFinishedUpdate).
+    private string? _updatedFrom;
+    private DateTime _updatedAt;
+    private string? _failedTo;
+
     public UpdateService(UpdateOptions options, Func<bool> updateAutomatically, Func<bool> isQuietMoment, Action<string, string> notify, Action quit,
-        ILogger<UpdateService> logger)
+        Action reopenSettings, ILogger<UpdateService> logger)
     {
         _options = options;
         _updateAutomatically = updateAutomatically;
         _isQuietMoment = isQuietMoment;
         _notify = notify;
         _quit = quit;
+        _reopenSettings = reopenSettings;
         _logger = logger;
         UpdateFeed.TryParseVersion(AppInfo.Version, out _current);
         _checkTimer.Tick += async (_, _) =>
@@ -88,9 +96,14 @@ internal sealed class UpdateService : IDisposable
     {
         get
         {
+            var updated = _updatedFrom is { } from ? $"Updated from version {from} at {_updatedAt:t}. " : "";
             if (!_options.Enabled)
             {
-                return UpdateState.Off;
+                // Setup starts the old copy without update checks after a failed update, so it doesn't try again at once.
+                return _failedTo is { } failed
+                    ? new UpdateState($"Version {failed} couldn't be installed, so you still have version {_current}. It tries again the next time the overlay starts.", null, false)
+                    : updated.Length > 0 ? UpdateState.Off with { Text = updated + UpdateState.Off.Text }
+                    : UpdateState.Off;
             }
 
             var busy = _activity.Length > 0;
@@ -107,9 +120,9 @@ internal sealed class UpdateService : IDisposable
                 return new UpdateState($"Version {ready} is downloaded.{how}", ready.ToString(3), true);
             }
 
-            var text = _problem is { } problem ? $"You have version {_current}. Couldn't look for a new one ({problem}); it tries again later."
-                : _lastChecked is { } at ? $"You have the latest version ({_current}). Last checked at {at:t}."
-                : $"You have version {_current}. New versions are looked for on GitHub a minute after start and every 6 hours.";
+            var text = _problem is { } problem ? $"{updated}You have version {_current}. Couldn't look for a new one ({problem}); it tries again later."
+                : _lastChecked is { } at ? $"{updated}You have the latest version ({_current}). Last checked at {at:t}."
+                : $"{updated}You have version {_current}. New versions are looked for on GitHub a minute after start and every 6 hours.";
             return new UpdateState(text, null, true);
         }
     }
@@ -170,9 +183,11 @@ internal sealed class UpdateService : IDisposable
 
     /// <summary>
     /// Installs the downloaded version now. The installed copy runs setup quietly and quits (setup starts the new
-    /// version); any other copy opens the setup window.
+    /// version, which opens its settings again when <paramref name="reopenSettings"/>); any other copy opens the setup
+    /// window.
     /// </summary>
-    public void InstallNow()
+    /// <param name="reopenSettings">Started from the settings window (its Install button).</param>
+    public void InstallNow(bool reopenSettings = false)
     {
         if (_readyPath is not { } setup || !File.Exists(setup) || _installing)
         {
@@ -190,9 +205,11 @@ internal sealed class UpdateService : IDisposable
         try
         {
             Directory.CreateDirectory(AppPaths.UpdatesDir);
-            File.WriteAllText(Path.Combine(AppPaths.UpdatesDir, UpdatedFromFile), AppInfo.Version);
+            var marker = new UpdateMarker(AppInfo.Version, _readyVersion?.ToString(3), reopenSettings);
+            File.WriteAllText(Path.Combine(AppPaths.UpdatesDir, UpdateMarker.FileName), marker.Format());
             Run(setup, $"--setup --quiet --launch --wait-for {Environment.ProcessId}{PassOn()}");
-            _logger.LogInformation("Updates: installing version {Version}; quitting so setup can replace the app", _readyVersion?.ToString(3));
+            _logger.LogInformation("Updates: installing version {Version}; quitting so setup can replace the app (then {Then})",
+                _readyVersion?.ToString(3), reopenSettings ? "settings open again" : "back in the notification area");
             _quit();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -237,24 +254,47 @@ internal sealed class UpdateService : IDisposable
 
         if (_isQuietMoment())
         {
-            InstallNow();
+            InstallNow(reopenSettings: false); // nothing was open: the new version starts in the notification area
         }
     }
 
-    /// <summary>The copy that just started was put there by an update: say so once, and tidy the downloads folder.</summary>
+    /// <summary>
+    /// The copy that just started was put there by an update (or started again after a failed one): say so once, open
+    /// the settings window again if the update was started from it, and tidy the downloads folder.
+    /// </summary>
     private void AnnounceFinishedUpdate()
     {
-        var marker = Path.Combine(AppPaths.UpdatesDir, UpdatedFromFile);
+        var path = Path.Combine(AppPaths.UpdatesDir, UpdateMarker.FileName);
         try
         {
-            if (File.Exists(marker))
+            if (File.Exists(path))
             {
-                var from = File.ReadAllText(marker).Trim();
-                File.Delete(marker);
-                if (from.Length > 0 && from != AppInfo.Version)
+                var marker = UpdateMarker.Parse(File.ReadAllText(path));
+                File.Delete(path);
+                switch (marker?.OutcomeFor(AppInfo.Version))
                 {
-                    _logger.LogInformation("Updates: updated from {From} to {Version}", from, AppInfo.Version);
-                    _notify($"Updated to version {AppInfo.Version}", $"{AppInfo.Name} updated itself from version {from}.");
+                    case UpdateOutcome.Updated:
+                        _updatedFrom = marker.From;
+                        _updatedAt = DateTime.Now;
+                        _logger.LogInformation("Updates: updated from {From} to {Version}{Reopen}", marker.From, AppInfo.Version,
+                            marker.ReopenSettings ? "; opening the settings again" : "");
+                        if (!marker.ReopenSettings)
+                        {
+                            _notify($"Updated to version {AppInfo.Version}", $"{AppInfo.Name} updated itself from version {marker.From}.");
+                        }
+
+                        break;
+                    case UpdateOutcome.Failed:
+                        _failedTo = marker.To;
+                        _logger.LogWarning("Updates: version {To} wasn't installed; this is still {Version}", marker.To, AppInfo.Version);
+                        _notify($"Version {marker.To} couldn't be installed",
+                            $"{AppInfo.Name} is still on version {AppInfo.Version}. It tries again the next time it starts.");
+                        break;
+                }
+
+                if (marker is { ReopenSettings: true } && marker.OutcomeFor(AppInfo.Version) != UpdateOutcome.None)
+                {
+                    _reopenSettings();
                 }
             }
 

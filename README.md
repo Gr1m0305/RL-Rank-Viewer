@@ -5,8 +5,8 @@ corner of the game's screen with every player's row from **tracker.gg** for the 
 default): rank, division, rating and how far to the next division, plus the stats you pick (**Wins**, **Streak** and
 **Peak MMR** by default, and an **All-time peak** for 1v1, 2v2 and 3v3 if you tick it). Rows appear as players join,
 Blue and Orange each get their own block, and the columns line up from player to player. Drag the header to move
-the panel and drag a corner to resize it. The panel fades out at kickoff, and clicking a name opens that player's
-full tracker.gg profile. After the match the whole lobby stays available (`Ctrl+R`) so you can look up who you just
+the panel and drag a corner to resize it. The panel fades out at kickoff (or stays up, if you prefer), and clicking a
+name opens that player's full tracker.gg profile. After the match the whole lobby stays available (`Ctrl+R`) so you can look up who you just
 played, through freeplay and the menus, until you load into a new game with other players or close the game.
 Players who quit early stay on the board too, marked *left the match*. The app waits quietly in the tray, switches
 on by itself when Rocket League starts and keeps itself up to date from GitHub. No account or API key is needed.
@@ -18,7 +18,7 @@ tracker.gg page. The repository holds no screenshots of tracker.gg pages because
 
 | Key | Does |
 |---|---|
-| `Ctrl+R` | Show / hide the lobby (works during the match too, where the next kickoff hides it again, and after the match) |
+| `Ctrl+R` | Show / hide the lobby (works during the match too, where the next kickoff hides it again unless it is kept open, and after the match) |
 | `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Heatseeker, Tournaments, Casual. Every row moves at once, without reloading |
 | Click a name | Opens that player's tracker.gg profile in your browser |
 | Drag the header | Moves the panel anywhere on its screen (the dotted grip on the right shows where to grab) |
@@ -154,7 +154,9 @@ Stats API on.
   default playlist; tick *Follow the match's playlist* in Settings to start on the playlist you're actually playing.
 * Clicking a name opens the full profile in your browser. While the browser is in front the overlay hides; alt-tab
   back to the game and it returns.
-* At kickoff the lobby fades out. `Ctrl+R` brings it back mid-match; the next kickoff hides it again.
+* At kickoff the lobby fades out. `Ctrl+R` brings it back mid-match; the next kickoff hides it again. To keep it on
+  screen for the whole match (handy on a second screen), turn on Settings → *In a match* → *Keep the lobby open when
+  the match starts*: then only `Ctrl+R` hides it, or leaving the match.
 * **Players who leave** (quitters, dropped connections) stay on the board, dimmed and marked *left the match*, and
   the team header counts them (*1 / 2 · 1 left*). They go with the rest of the lobby when the next game starts; if
   they come back, the mark goes.
@@ -201,7 +203,9 @@ With **Update automatically** on (the default), the installed copy installs the 
 is closed: setup runs without a window, replaces the app and starts the new version, which shows a short *Updated to
 version …* notice. It never installs in the middle of a game. With it off, or when running a copy that isn't the
 installed one, a notice says the update is ready. Settings → *General* shows what the updater found and has
-**Check for updates** and **Install … now** (which restarts the overlay).
+**Check for updates** and **Install … now**: the overlay restarts as the new version and opens Settings again, where
+*General* says it was updated. If an update can't be installed, the old version starts again and says so (it tries
+again the next time it starts).
 
 ## Try it without the game
 

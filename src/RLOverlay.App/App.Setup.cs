@@ -25,12 +25,14 @@ public partial class App
         // single-instance mutex, so it can't reach a running copy) that quits by itself after a few seconds.
         Func<bool> closeRunning = sandbox is null ? () => InstanceSignals.CloseRunningApp(TimeSpan.FromSeconds(10)) : () => true;
         var dataDir = _args.DataDir is { } data ? $" --data-dir \"{Path.GetFullPath(data)}\"" : "";
-        void Launch(string exe) => Process.Start(new ProcessStartInfo(exe)
+        void Start(string exe, bool skipUpdates) => Process.Start(new ProcessStartInfo(exe)
         {
             UseShellExecute = true,
             WorkingDirectory = Path.GetDirectoryName(exe)!,
-            Arguments = sandbox is null ? dataDir.TrimStart() : $"--exit-after 8 --port 49999 --no-update-check{dataDir}",
+            Arguments = sandbox is null ? ((skipUpdates ? "--no-update-check" : "") + dataDir).TrimStart()
+                : $"--exit-after 8 --port 49999 --no-update-check{dataDir}",
         })?.Dispose();
+        void Launch(string exe) => Start(exe, skipUpdates: false);
 
         // An update: the copy being replaced quits right after starting setup; wait until its exe is free.
         if (_args.WaitForProcess is { } pid)
@@ -53,9 +55,13 @@ public partial class App
             {
                 _log.LogError("Setup failed: {Error}", vm.Error);
             }
-            else if (_args.LaunchWhenDone && !_args.Uninstall && vm.InstalledExe is { } installed)
+
+            // An update (--launch) always brings the app back: the new version, or the old one if this failed. The old
+            // one then skips update checks for that run, so a lasting problem doesn't repeat every minute.
+            if (_args.LaunchWhenDone && !_args.Uninstall && vm.AppToStart is { } app)
             {
-                Launch(installed);
+                _log.LogInformation("Setup: starting {Exe}{Old}", app, ok ? "" : " (the copy that was there before)");
+                Start(app, skipUpdates: !ok);
             }
 
             Shutdown(ok ? 0 : 1);

@@ -60,6 +60,13 @@ public sealed partial class SetupViewModel : ObservableObject
     /// <summary>The installed exe, once setup has run.</summary>
     public string? InstalledExe => _installedExe;
 
+    /// <summary>
+    /// What to start after a quiet update: the exe just installed, or, if setup failed before getting that far, the
+    /// one that was installed before (still in place: the exe is swapped in one move).
+    /// </summary>
+    public string? AppToStart =>
+        _installedExe ?? (_existing?.ExePath is { } exe && File.Exists(exe) ? exe : null);
+
     public bool IsUpdate => !IsUninstall && _existing is not null;
 
     public string Title =>

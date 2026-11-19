@@ -32,6 +32,12 @@ public sealed class OverlaySettings
     /// <summary>Stats shown next to each player's tracker.gg rank row.</summary>
     public StatColumns Columns { get; set; } = new();
 
+    /// <summary>
+    /// Keep the lobby on screen when the match starts instead of hiding it at kickoff: it stays until the show / hide
+    /// shortcut, or until the match is left. Off by default (missing in older files, so no new schema version).
+    /// </summary>
+    public bool KeepOpenAtKickoff { get; set; }
+
     // Hotkeys
     public string ToggleHotkey { get; set; } = "Ctrl+R";
 

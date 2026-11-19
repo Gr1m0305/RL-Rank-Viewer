@@ -41,7 +41,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
             <StackPanel Margin="24,18,22,24">
                 <!-- Header -->
                 <DockPanel Margin="0,0,0,2">
@@ -195,6 +195,17 @@
                     </StackPanel>
                 </Border>
 
+                <!-- In a match -->
+                <TextBlock Text="IN A MATCH" Style="{StaticResource SectionHeader}" />
+                <Border Style="{StaticResource Card}">
+                    <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding KeepOpenAtKickoff}">
+                        <StackPanel>
+                            <TextBlock Text="Keep the lobby open when the match starts" FontSize="13.5" />
+                            <TextBlock Text="{Binding KeepOpenHint}" Style="{StaticResource Hint}" />
+                        </StackPanel>
+                    </CheckBox>
+                </Border>
+
                 <!-- Position and size -->
                 <TextBlock Text="POSITION AND SIZE" Style="{StaticResource SectionHeader}" />
                 <Border Style="{StaticResource Card}">
@@ -236,7 +247,7 @@
                 </Border>
 
                 <!-- General -->
-                <TextBlock Text="GENERAL" Style="{StaticResource SectionHeader}" />
+                <TextBlock x:Name="GeneralHeader" Text="GENERAL" Style="{StaticResource SectionHeader}" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding RunAtStartup}">

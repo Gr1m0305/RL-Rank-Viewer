@@ -31,6 +31,13 @@ public sealed class LobbyStateMachine
     // PlayersForNewGame players (then it becomes the lobby) or ends without them (freeplay, training: dropped).
     private LobbyStateMachine? _next;
 
+    /// <summary>
+    /// The "Keep the lobby open when the match starts" setting: kickoff no longer hides the panel (whether the game
+    /// popped it up or Ctrl+R opened it). Ctrl+R still hides it, and leaving the match still hides a panel the game
+    /// popped up.
+    /// </summary>
+    public bool KeepOpenAtKickoff { get; set; }
+
     public MatchPhase Phase { get; private set; } = MatchPhase.Idle;
 
     public bool PanelVisible { get; private set; }
@@ -67,7 +74,10 @@ public sealed class LobbyStateMachine
         return effects;
     }
 
-    /// <summary>Ctrl+R: toggle the panel in any phase. A manual open lasts until Ctrl+R or the next kickoff.</summary>
+    /// <summary>
+    /// Ctrl+R: toggle the panel in any phase. A manual open lasts until Ctrl+R or the next kickoff (only Ctrl+R with
+    /// <see cref="KeepOpenAtKickoff"/>).
+    /// </summary>
     public IReadOnlyList<LobbyEffect> TogglePanel()
     {
         PanelVisible = !PanelVisible;
@@ -99,7 +109,7 @@ public sealed class LobbyStateMachine
     {
         if (_next is null)
         {
-            _next = new LobbyStateMachine();
+            _next = new LobbyStateMachine { KeepOpenAtKickoff = KeepOpenAtKickoff };
             Phase = MatchPhase.Ended; // whatever was kept is over now
         }
 
@@ -152,7 +162,7 @@ public sealed class LobbyStateMachine
             _openedManually = false;
             effects.Add(new PanelVisibilityEffect(true, PanelChangeReason.MatchStarted));
         }
-        else if (!next.PanelVisible && PanelVisible && Phase == MatchPhase.Live)
+        else if (!next.PanelVisible && PanelVisible && Phase == MatchPhase.Live && !KeepOpenAtKickoff)
         {
             PanelVisible = false;
             effects.Add(new PanelVisibilityEffect(false, PanelChangeReason.Kickoff));
@@ -330,7 +340,7 @@ public sealed class LobbyStateMachine
                 break;
 
             case MatchEventKind.RoundStarted:
-                // Kickoff. Also ends a manual Ctrl+R open.
+                // Kickoff. Also ends a manual Ctrl+R open (unless the panel is kept open at kickoff).
                 if (Phase == MatchPhase.Ended)
                 {
                     if (!IsNewMatch(evt.MatchGuid))
@@ -346,7 +356,7 @@ public sealed class LobbyStateMachine
                 }
 
                 Phase = MatchPhase.Live;
-                if (PanelVisible)
+                if (PanelVisible && !KeepOpenAtKickoff)
                 {
                     PanelVisible = false;
                     effects.Add(new PanelVisibilityEffect(false, PanelChangeReason.Kickoff));

@@ -25,7 +25,7 @@ internal sealed class OverlayCoordinator : IDisposable
     private readonly ILogger _logger;
     private readonly DispatcherTimer _stripTimer;
     private readonly DispatcherTimer _holdTimer;
-    private LobbyStateMachine _lobby = new();
+    private LobbyStateMachine _lobby;
     private OverlaySettings _settings;
     private bool _userCycled;
 
@@ -36,6 +36,7 @@ internal sealed class OverlayCoordinator : IDisposable
         ILogger<OverlayCoordinator> logger)
     {
         _settings = settings;
+        _lobby = new LobbyStateMachine { KeepOpenAtKickoff = settings.KeepOpenAtKickoff };
         _vm = vm;
         _window = window;
         _logger = logger;
@@ -84,6 +85,7 @@ internal sealed class OverlayCoordinator : IDisposable
     public void ApplySettings(OverlaySettings settings)
     {
         _settings = settings;
+        _lobby.KeepOpenAtKickoff = settings.KeepOpenAtKickoff;
         _vm.ApplySettings(settings);
         if (!settings.EnabledPlaylists.Contains(_vm.Playlist))
         {
@@ -117,7 +119,7 @@ internal sealed class OverlayCoordinator : IDisposable
     public void Reset()
     {
         HideStrip();
-        _lobby = new LobbyStateMachine();
+        _lobby = new LobbyStateMachine { KeepOpenAtKickoff = _settings.KeepOpenAtKickoff };
         _userCycled = false;
         _vm.Phase = MatchPhase.Idle;
         _vm.Clear();

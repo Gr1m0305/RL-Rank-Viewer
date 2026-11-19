@@ -63,6 +63,9 @@ public sealed partial class PanelViewModel : ObservableObject
 
     public IReadOnlyList<Playlist> EnabledPlaylists { get; private set; } = Enum.GetValues<Playlist>();
 
+    /// <summary>The lobby stays open after kickoff (the footer says how to hide it instead of "Hides at kickoff").</summary>
+    public bool KeepOpenAtKickoff { get; private set; }
+
     /// <summary>tracker.gg's label for the selected playlist's row ("Ranked Doubles 2v2").</summary>
     public string RowLabel => TrackerPage.RowLabel(Playlist);
 
@@ -95,6 +98,7 @@ public sealed partial class PanelViewModel : ObservableObject
         CycleKeys = HotkeyGesture.TryParse(settings.CycleHotkey, out var cycle) ? cycle.DisplayParts : ["Ctrl", "G"];
         ToggleKeys = HotkeyGesture.TryParse(settings.ToggleHotkey, out var toggle) ? toggle.DisplayParts : ["Ctrl", "R"];
         EnabledPlaylists = settings.EnabledPlaylists.ToList();
+        KeepOpenAtKickoff = settings.KeepOpenAtKickoff;
         Strip.Update(Playlist, EnabledPlaylists);
         Refresh();
     }
@@ -195,7 +199,7 @@ public sealed partial class PanelViewModel : ObservableObject
             FooterLeft = Phase == MatchPhase.Ended
                 ? "Match over · click a name for the full tracker.gg profile"
                 : "Rows from tracker.gg · click a name for the full profile";
-            FooterRight = Phase == MatchPhase.PreKickoff ? "Hides at kickoff" : hide;
+            FooterRight = Phase == MatchPhase.PreKickoff && !KeepOpenAtKickoff ? "Hides at kickoff" : hide;
         }
 
         ShownPlayers = _players.ToList();

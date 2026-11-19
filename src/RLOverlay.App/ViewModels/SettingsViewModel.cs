@@ -85,7 +85,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private static readonly string[] LiveProperties =
     [
         nameof(OffsetX), nameof(OffsetY), nameof(ScalePercent), nameof(ToggleHotkey), nameof(CycleHotkey), nameof(DefaultPlaylist),
-        nameof(SelectedScreen),
+        nameof(SelectedScreen), nameof(KeepOpenAtKickoff),
     ];
 
     /// <summary>The first Screen entry, and the default.</summary>
@@ -122,6 +122,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         RebuildDefaultChoices();
         _defaultPlaylist = DefaultChoices.FirstOrDefault(o => o.Playlist == _original.DefaultPlaylist) ?? DefaultChoices.FirstOrDefault();
         _followMatchPlaylist = _original.FollowMatchPlaylist;
+        _keepOpenAtKickoff = _original.KeepOpenAtKickoff;
         _toggleHotkey = Display(_original.ToggleHotkey, "Ctrl+R");
         _cycleHotkey = Display(_original.CycleHotkey, "Ctrl+G");
         _offsetX = _original.OffsetX;
@@ -174,7 +175,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _followMatchPlaylist;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(KeepOpenHint))]
     private string _toggleHotkey;
+
+    [ObservableProperty]
+    private bool _keepOpenAtKickoff;
+
+    /// <summary>Under "Keep the lobby open when the match starts", with the show / hide shortcut as edited.</summary>
+    public string KeepOpenHint =>
+        $"It normally hides at kickoff. With this on it stays until you press {ToggleHotkey} or leave the match, handy on a second screen.";
 
     [ObservableProperty]
     private string _cycleHotkey;
@@ -290,6 +299,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.EnabledPlaylists = Playlists.Where(p => p.IsEnabled).Select(p => p.Playlist).ToList();
         s.DefaultPlaylist = DefaultPlaylist?.Playlist ?? s.EnabledPlaylists.FirstOrDefault(Playlist.Doubles);
         s.FollowMatchPlaylist = FollowMatchPlaylist;
+        s.KeepOpenAtKickoff = KeepOpenAtKickoff;
         bool Col(string key) => Columns.First(c => c.Key == key).IsOn;
         s.Columns = new StatColumns
         {
