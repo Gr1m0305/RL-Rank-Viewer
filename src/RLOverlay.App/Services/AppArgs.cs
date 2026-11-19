@@ -68,6 +68,15 @@ internal sealed record AppArgs
     /// <summary>Never look for updates.</summary>
     public bool NoUpdateCheck { get; init; }
 
+    /// <summary>
+    /// Testing (demo and <c>--port</c> runs only): a few seconds after start, drag the panel by its header along a fixed
+    /// path with a made-up cursor (the real mouse is never moved) and log how smoothly it followed.
+    /// </summary>
+    public bool SimulateDrag { get; init; }
+
+    /// <summary>Testing: like <see cref="SimulateDrag"/>, but drags the bottom-left corner (resizing the panel).</summary>
+    public bool SimulateResize { get; init; }
+
     public IReadOnlyList<string> Unknown { get; init; } = [];
 
     public static AppArgs Parse(IReadOnlyList<string> args)
@@ -145,6 +154,12 @@ internal sealed record AppArgs
                     break;
                 case "--no-update-check":
                     result = result with { NoUpdateCheck = true };
+                    break;
+                case "--simulate-drag":
+                    result = result with { SimulateDrag = true };
+                    break;
+                case "--simulate-resize":
+                    result = result with { SimulateResize = true };
                     break;
                 default:
                     unknown.Add(arg);

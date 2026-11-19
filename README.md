@@ -142,7 +142,8 @@ Stats API on.
 
 * Load into any match: the lobby slides in at the top right of the game's screen and fills in as players arrive.
 * Drag the header to move it and drag any corner to make it bigger or smaller (it won't go below 75 % or above
-  150 %). Where you leave it is saved straight away and used for every match after.
+  150 %). The panel follows the pointer once per frame your screen shows (from 0.5.1; before, it moved in jerky
+  steps about 55 times a second). Where you leave it is saved straight away and used for every match after.
 * `Ctrl+G` moves every row to another playlist's row on the same pages (no reload). Every match starts on your
   default playlist; tick *Follow the match's playlist* in Settings to start on the playlist you're actually playing.
 * Clicking a name opens the full profile in your browser. While the browser is in front the overlay hides; alt-tab

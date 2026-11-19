@@ -157,6 +157,7 @@ public partial class App : Application
         CreateTray();
         StartNotices();
         StartUpdates();
+        StartSimulatedDrag();
 
         if (!_settings.FirstRunCompleted && !_args.Demo)
         {
@@ -253,7 +254,7 @@ public partial class App : Application
 
         _tracker = new GameWindowTracker(LoggerFactory.CreateLogger<GameWindowTracker>());
         _links = new LinkOpener(_args.DryRunLinks, LoggerFactory.CreateLogger<LinkOpener>());
-        _window = new OverlayWindow();
+        _window = new OverlayWindow { Logger = LoggerFactory.CreateLogger<OverlayWindow>() };
         _panelView = new TrackerPanelView(url => _links.Open(url), LoggerFactory.CreateLogger<TrackerPanelView>()) { DataContext = _panel };
         _panelView.SetZoom(_settings.Scale);
         _window.Panel = _panelView;
@@ -480,6 +481,27 @@ public partial class App : Application
     /// GitHub release checks (see <see cref="UpdateService"/>). Demo and test (--port) runs don't check unless they name
     /// a test feed with --update-feed (which also checks after a few seconds instead of a minute).
     /// </summary>
+    /// <summary>
+    /// <c>--simulate-drag</c> / <c>--simulate-resize</c> (demo and <c>--port</c> runs): once the demo lobby has filled in,
+    /// drag the panel (or its corner) along a fixed path with a made-up cursor and log how it went (see
+    /// <see cref="OverlayWindow.SimulateDrag"/>).
+    /// </summary>
+    private void StartSimulatedDrag()
+    {
+        if (!(_args.SimulateDrag || _args.SimulateResize) || (!_args.Demo && _args.Port is null) || _window is null)
+        {
+            return;
+        }
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            _window.SimulateDrag(TimeSpan.FromSeconds(3), resize: _args.SimulateResize);
+        };
+        timer.Start();
+    }
+
     private void StartUpdates()
     {
         Uri? testFeed = _args.UpdateFeed is { } address && Uri.TryCreate(address, UriKind.Absolute, out var parsed) ? parsed : null;

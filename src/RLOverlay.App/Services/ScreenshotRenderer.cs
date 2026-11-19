@@ -105,7 +105,7 @@ internal static class ScreenshotRenderer
         try
         {
             window.UpdateLayout();
-            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            Settle();
             var background = (Brush)window.FindResource("WindowBackground");
             var client = (FrameworkElement)window.Content;
             written.Add(RenderVisual(client, client.ActualWidth, client.ActualHeight, background, Path.Combine(directory, "08_settings.png")));
@@ -139,7 +139,7 @@ internal static class ScreenshotRenderer
         try
         {
             window.UpdateLayout();
-            Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            Settle();
             var client = (FrameworkElement)window.Content;
             written.Add(RenderVisual(client, client.ActualWidth, client.ActualHeight, (Brush)window.FindResource("WindowBackground"),
                 Path.Combine(directory, "11_setup.png")));
@@ -148,6 +148,24 @@ internal static class ScreenshotRenderer
         {
             window.Close();
         }
+    }
+
+    /// <summary>
+    /// Lets a freshly shown window finish its entrance animations (switches slide to their state when they load) before
+    /// it is captured; without this a screenshot could catch a switch halfway.
+    /// </summary>
+    private static void Settle()
+    {
+        var frame = new DispatcherFrame();
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            frame.Continue = false;
+        };
+        timer.Start();
+        Dispatcher.PushFrame(frame);
+        Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
     }
 
     /// <summary>

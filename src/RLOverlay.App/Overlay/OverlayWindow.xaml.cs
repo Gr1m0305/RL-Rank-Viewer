@@ -1,9 +1,11 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Microsoft.Extensions.Logging;
 using RLOverlay.App.Native;
 using RLOverlay.Core.Config;
 
@@ -24,8 +26,17 @@ public partial class OverlayWindow : Window
     private static readonly TimeSpan FadeOut = TimeSpan.FromMilliseconds(250);
 
     private readonly ClickThroughController _clickThrough;
-    private readonly DispatcherTimer _dragTimer;
+    private readonly Action _dragFrame;
+    private readonly DispatcherTimer _dragBackstop;
+    private long _lastDragTick;
     private DragStart? _drag;
+    private FrameClock? _frameClock;
+    private int _framePending;
+    private DispatcherPriority _framePriority = DispatcherPriority.Send;
+    private (int Dx, int Dy)? _lastDelta;
+    private ProcessPriorityClass? _priorityBeforeDrag;
+    private Func<(int X, int Y, bool Down)>? _simulatedCursor;
+    private readonly List<long> _moves = [];
     private IntPtr _hwnd;
     private Func<IntPtr>? _gameWindow;
     private double _offsetX;
@@ -37,13 +48,33 @@ public partial class OverlayWindow : Window
         InitializeComponent();
         _clickThrough = new ClickThroughController(this, Root);
         SourceInitialized += OnSourceInitialized;
-        SizeChanged += (_, _) => Reposition();
+        SizeChanged += (_, _) =>
+        {
+            if (_drag is null) // a drag places the window itself, right after the resize it caused
+            {
+                Reposition();
+            }
+        };
         DpiChanged += (_, _) => Reposition();
 
-        // The drag follows the cursor by polling, so it keeps going even if the cursor outruns the window (a window that
-        // never activates can't capture the mouse).
-        _dragTimer = new DispatcherTimer(DispatcherPriority.Render, Dispatcher) { Interval = TimeSpan.FromMilliseconds(10) };
-        _dragTimer.Tick += (_, _) => OnDragTick();
+        // The drag follows the cursor by polling it once per frame the screen shows (FrameClock), so it keeps going even
+        // if the cursor outruns the window (a window that never activates can't capture the mouse).
+        _dragFrame = () =>
+        {
+            Volatile.Write(ref _framePending, 0);
+            OnDragTick();
+        };
+
+        // In case the frame clock ever stalls (a display that stops answering), the drag still follows the cursor and
+        // still notices the button being let go.
+        _dragBackstop = new DispatcherTimer(DispatcherPriority.Input, Dispatcher) { Interval = TimeSpan.FromMilliseconds(50) };
+        _dragBackstop.Tick += (_, _) =>
+        {
+            if (Stopwatch.GetElapsedTime(_lastDragTick) > TimeSpan.FromMilliseconds(40))
+            {
+                OnDragTick();
+            }
+        };
         Root.PreviewMouseLeftButtonDown += OnMouseDown;
     }
 
@@ -51,6 +82,8 @@ public partial class OverlayWindow : Window
     /// The user moved or resized the screen (drag ended): the new offset from the top-right corner in DIPs and the scale.
     /// </summary>
     public event Action<double, double, double>? PlacementChanged;
+
+    public ILogger? Logger { get; init; }
 
     /// <summary>True while the user is dragging the header or a corner.</summary>
     public bool IsDragging => _drag is not null;
@@ -231,12 +264,25 @@ public partial class OverlayWindow : Window
             return;
         }
 
-        var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        Place(Monitor(), VisualTreeHelper.GetDpi(this).DpiScaleX);
+    }
+
+    /// <summary>
+    /// Puts the window at the current offset on <paramref name="monitor"/>. A drag passes the monitor and DPI it read
+    /// when it started, so a move costs one <c>SetWindowPos</c> (looking for the game window can mean listing every
+    /// process when the game isn't running).
+    /// </summary>
+    private void Place(PixelRect monitor, double dpi)
+    {
         var width = (int)Math.Ceiling(ActualWidth * dpi);
         var height = (int)Math.Ceiling(ActualHeight * dpi);
-        var (x, y) = PanelPlacement.TopRight(Monitor(), width, height, _offsetX, _offsetY, dpi, (int)Math.Round(ShadowMargin * dpi));
+        var (x, y) = PanelPlacement.TopRight(monitor, width, height, _offsetX, _offsetY, dpi, (int)Math.Round(ShadowMargin * dpi));
         NativeMethods.SetWindowPos(_hwnd, NativeMethods.HWND_TOPMOST, x, y, 0, 0,
             NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOOWNERZORDER);
+        if (_drag is not null)
+        {
+            _moves.Add(Stopwatch.GetTimestamp());
+        }
     }
 
     private PixelRect Monitor()
@@ -264,28 +310,157 @@ public partial class OverlayWindow : Window
         }
 
         e.Handled = true;
-        var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
-        _drag = new DragStart(kind, cursor.X, cursor.Y, rect, Monitor(), dpi, (int)Math.Round(ShadowMargin * dpi), Scale.ScaleX);
-        _dragTimer.Start();
+        BeginDrag(kind, cursor.X, cursor.Y, rect);
 
         static DependencyObject? Parent(DependencyObject d) =>
             d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
+    }
+
+    private void BeginDrag(OverlayDrag kind, int cursorX, int cursorY, NativeMethods.RECT rect)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        _drag = new DragStart(kind, cursorX, cursorY, rect, Monitor(), dpi, (int)Math.Round(ShadowMargin * dpi), Scale.ScaleX);
+        _lastDelta = null;
+        _moves.Clear();
+
+        // A move is one SetWindowPos, so it goes ahead of everything. A resize lays the whole panel out again; at the
+        // render priority it takes turns with WPF's own repaint, so the panel keeps redrawing while it grows.
+        _framePriority = kind == OverlayDrag.Move ? DispatcherPriority.Send : DispatcherPriority.Render;
+        _priorityBeforeDrag = RaisePriority();
+        _lastDragTick = Stopwatch.GetTimestamp();
+        _frameClock = FrameClock.Start(_hwnd, OnFrame, Logger);
+        _dragBackstop.Start();
+    }
+
+    /// <summary>
+    /// On the frame clock's thread, once per refresh: asks the UI thread to follow the cursor, ahead of any other queued
+    /// work. At most one request waits at a time, so a busy UI thread skips frames instead of falling behind.
+    /// </summary>
+    private void OnFrame()
+    {
+        if (Interlocked.Exchange(ref _framePending, 1) == 0)
+        {
+            Dispatcher.BeginInvoke(_framePriority, _dragFrame);
+        }
+    }
+
+    /// <summary>
+    /// The app runs below normal priority so the game gets the CPU first (see App.OnStartup). While the user drags the
+    /// panel it is what they are looking at, so it runs above normal until they let go.
+    /// </summary>
+    private ProcessPriorityClass? RaisePriority()
+    {
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            var before = self.PriorityClass;
+            if (before is ProcessPriorityClass.BelowNormal or ProcessPriorityClass.Idle or ProcessPriorityClass.Normal)
+            {
+                self.PriorityClass = ProcessPriorityClass.AboveNormal;
+                return before;
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Logger?.LogDebug(ex, "Could not raise the priority for a drag");
+        }
+
+        return null;
+    }
+
+    private void RestorePriority()
+    {
+        if (_priorityBeforeDrag is not { } before)
+        {
+            return;
+        }
+
+        _priorityBeforeDrag = null;
+        try
+        {
+            using var self = Process.GetCurrentProcess();
+            self.PriorityClass = before;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Logger?.LogDebug(ex, "Could not restore the priority after a drag");
+        }
+    }
+
+    /// <summary>
+    /// Testing (<c>--simulate-drag</c>): drags the panel by its header for <paramref name="duration"/> with a made-up
+    /// cursor (the real mouse is never moved): side to side at a steady 1200 px/s (600 px each way, starting to the
+    /// left) while going down and up at 400 px/s, then lets go and logs how often the panel moved. With
+    /// <paramref name="resize"/> the bottom-left corner is dragged the same way instead, so the panel grows and shrinks.
+    /// </summary>
+    internal void SimulateDrag(TimeSpan duration, bool resize = false)
+    {
+        if (_hwnd == IntPtr.Zero || _drag is not null || !IsVisible || !NativeMethods.GetWindowRect(_hwnd, out var rect))
+        {
+            Logger?.LogWarning("Simulated drag: the panel isn't on screen");
+            return;
+        }
+
+        var inset = (int)Math.Round((ShadowMargin + 20) * VisualTreeHelper.GetDpi(this).DpiScaleX);
+        var x0 = resize ? rect.Left + inset : rect.Left + (rect.Width / 2);
+        var y0 = resize ? rect.Bottom - inset : rect.Top + inset;
+        var clock = Stopwatch.StartNew();
+        _simulatedCursor = () =>
+        {
+            var t = clock.Elapsed.TotalSeconds;
+            var (dx, dy) = SimulatedPath(t);
+            return (x0 + dx, y0 + dy, t < duration.TotalSeconds);
+        };
+        Logger?.LogInformation("Simulated {Kind} for {Seconds} s from {X}, {Y}", resize ? "resize" : "drag", duration.TotalSeconds, x0, y0);
+        BeginDrag(resize ? OverlayDrag.BottomLeft : OverlayDrag.Move, x0, y0, rect);
+    }
+
+    /// <summary>The simulated cursor's offset after <paramref name="t"/> seconds: a zig-zag at constant speed.</summary>
+    internal static (int Dx, int Dy) SimulatedPath(double t)
+    {
+        static double Triangle(double t, double speed, double reach)
+        {
+            var travel = (t * speed) % (2 * reach);
+            return travel <= reach ? travel : (2 * reach) - travel;
+        }
+
+        return (-(int)Math.Round(Triangle(t, 1200, 600)), (int)Math.Round(Triangle(t, 400, 200)));
+    }
+
+    private bool ReadCursor(out int x, out int y, out bool down)
+    {
+        if (_simulatedCursor is { } simulated)
+        {
+            (x, y, down) = simulated();
+            return true;
+        }
+
+        down = NativeMethods.PrimaryButtonDown();
+        var ok = NativeMethods.GetCursorPos(out var p);
+        (x, y) = (p.X, p.Y);
+        return ok;
     }
 
     private void OnDragTick()
     {
         if (_drag is not { } start)
         {
-            _dragTimer.Stop();
-            return;
+            return; // a frame that was already queued when the drag ended
         }
 
-        if (NativeMethods.GetCursorPos(out var cursor))
+        _lastDragTick = Stopwatch.GetTimestamp();
+
+        if (ReadCursor(out var x, out var y, out var down))
         {
-            DragTo(start, cursor.X - start.CursorX, cursor.Y - start.CursorY);
+            var delta = (x - start.CursorX, y - start.CursorY);
+            if (delta != _lastDelta)
+            {
+                _lastDelta = delta;
+                DragTo(start, delta.Item1, delta.Item2);
+            }
         }
 
-        if (!NativeMethods.PrimaryButtonDown())
+        if (!down)
         {
             EndDrag(commit: true);
         }
@@ -298,8 +473,15 @@ public partial class OverlayWindow : Window
             return;
         }
 
+        var simulated = _simulatedCursor is not null;
+        var clock = _frameClock?.Source;
         _drag = null;
-        _dragTimer.Stop();
+        _simulatedCursor = null;
+        _frameClock?.Dispose();
+        _frameClock = null;
+        _dragBackstop.Stop();
+        RestorePriority();
+        ReportDrag(simulated, clock);
         if (!commit)
         {
             return;
@@ -328,7 +510,7 @@ public partial class OverlayWindow : Window
         if (start.Kind == OverlayDrag.Move)
         {
             (_offsetX, _offsetY) = PanelPlacement.OffsetFor(start.Monitor, w0, start.Window.Left + dx, start.Window.Top + dy, start.Dpi, start.Shadow);
-            Reposition();
+            Place(start.Monitor, start.Dpi);
             return;
         }
 
@@ -349,7 +531,36 @@ public partial class OverlayWindow : Window
             UpdateLayout(); // resize now, so the move below uses the new size
         }
 
-        Reposition();
+        Place(start.Monitor, start.Dpi);
+    }
+
+    /// <summary>How often the window moved during the drag (Information for a simulated drag, else Debug).</summary>
+    private void ReportDrag(bool simulated, string? clock)
+    {
+        if (_moves.Count < 2 || Logger is null)
+        {
+            return;
+        }
+
+        var gaps = new double[_moves.Count - 1];
+        for (var i = 1; i < _moves.Count; i++)
+        {
+            gaps[i - 1] = (_moves[i] - _moves[i - 1]) * 1000.0 / Stopwatch.Frequency;
+        }
+
+        Array.Sort(gaps);
+        var seconds = (_moves[^1] - _moves[0]) / (double)Stopwatch.Frequency;
+        Logger.Log(
+            simulated ? LogLevel.Information : LogLevel.Debug,
+            "Drag: {Moves} moves in {Seconds:0.00} s ({Rate:0} per second, clock: {Clock}), gap median {Median:0.0} ms, 95% {P95:0.0} ms, worst {Worst:0.0} ms",
+            _moves.Count,
+            seconds,
+            (_moves.Count - 1) / Math.Max(seconds, 0.001),
+            clock,
+            gaps[gaps.Length / 2],
+            gaps[(int)(gaps.Length * 0.95)],
+            gaps[^1]);
+        _moves.Clear();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)

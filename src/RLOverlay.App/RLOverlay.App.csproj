@@ -37,6 +37,11 @@
     <ProjectReference Include="..\RLOverlay.Core\RLOverlay.Core.csproj" />
   </ItemGroup>
 
+  <!-- Tests cover internal helpers too (launch flags, the drag's frame clock and test path). -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="RLOverlay.Tests" />
+  </ItemGroup>
+
   <!-- The demo lobby for the demo flag (same file the tests and FakeStatsServer use). The licence is also embedded so
        the installer can write it next to the installed exe. -->
   <ItemGroup>
