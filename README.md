@@ -203,9 +203,9 @@ With **Update automatically** on (the default), the installed copy installs the 
 is closed: setup runs without a window, replaces the app and starts the new version, which shows a short *Updated to
 version …* notice. It never installs in the middle of a game. With it off, or when running a copy that isn't the
 installed one, a notice says the update is ready. Settings → *General* shows what the updater found and has
-**Check for updates** and **Install … now**: the overlay restarts as the new version and opens Settings again, where
-*General* says it was updated. If an update can't be installed, the old version starts again and says so (it tries
-again the next time it starts).
+**Check for updates** and **Install … now**. After an update the overlay starts again by itself as the new version,
+in the notification area with no window open, and a notice says it was updated. If an update can't be installed, the
+old version starts again and says so (it tries again the next time it starts).
 
 ## Try it without the game
 

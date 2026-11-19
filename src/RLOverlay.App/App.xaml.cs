@@ -509,8 +509,7 @@ public partial class App : Application
         var enabled = !_args.NoUpdateCheck && (!testRun || testFeed is not null);
         var options = new UpdateOptions(testFeed ?? UpdateFeed.LatestRelease, enabled, _args.SetupSandbox, _args.DataDir);
         _updates = new UpdateService(options, () => _settings.UpdateAutomatically, IsQuietMoment,
-            (title, text) => _tray?.Notify(title, text), () => Shutdown(),
-            () => Dispatcher.BeginInvoke(() => OpenSettings(showUpdates: true)), LoggerFactory.CreateLogger<UpdateService>());
+            (title, text) => _tray?.Notify(title, text), () => Shutdown(), LoggerFactory.CreateLogger<UpdateService>());
         _updates.Start(testFeed is not null ? TimeSpan.FromSeconds(5) : TimeSpan.FromMinutes(1));
     }
 

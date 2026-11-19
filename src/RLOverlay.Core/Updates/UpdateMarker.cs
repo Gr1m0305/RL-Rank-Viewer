@@ -14,28 +14,22 @@ public enum UpdateOutcome
 }
 
 /// <summary>
-/// The note a copy leaves in <c>updates\updated-from.txt</c> right before setup replaces it: the version it is, the
-/// version being installed and whether its settings window was open. The copy that starts afterwards (the new version,
-/// or the old one again if setup failed) reads it to say what happened and to come back the way the user left it.
+/// The note a copy leaves in <c>updates\updated-from.txt</c> right before setup replaces it: the version it is and the
+/// version being installed. The copy that starts afterwards (the new version, or the old one again if setup failed)
+/// reads it to say what happened.
 /// </summary>
 /// <param name="From">The version that started the update.</param>
 /// <param name="To">The version being installed (null in notes from 0.6.0 and older, which only held the version).</param>
-/// <param name="ReopenSettings">The update was started from the settings window: open it again afterwards.</param>
-public sealed record UpdateMarker(string From, string? To, bool ReopenSettings)
+public sealed record UpdateMarker(string From, string? To)
 {
     public const string FileName = "updated-from.txt";
 
-    /// <summary>
-    /// First line the version it came from (all that notes from 0.6.0 and older hold), then <c>to=</c> and
-    /// <c>open=settings</c> or <c>open=tray</c>.
-    /// </summary>
-    public string Format() =>
-        string.Join("\n", new[] { From, To is { } to ? $"to={to}" : null, $"open={(ReopenSettings ? "settings" : "tray")}" }.OfType<string>()) + "\n";
+    /// <summary>First line the version it came from (all that notes from 0.6.0 and older hold), then <c>to=</c>.</summary>
+    public string Format() => To is { } to ? $"{From}\nto={to}\n" : $"{From}\n";
 
     /// <summary>
-    /// Reads a note; null when it is empty. A note from 0.6.0 or older says nothing about the settings window: those
-    /// copies could only be updated from it or while nothing was open, and opening Settings once is the clear way to
-    /// show the app is back.
+    /// Reads a note; null when it is empty. Lines it doesn't know are skipped, such as the <c>open=</c> line 0.7.0 wrote
+    /// (whether its settings window was open, which no longer matters).
     /// </summary>
     public static UpdateMarker? Parse(string? text)
     {
@@ -46,7 +40,6 @@ public sealed record UpdateMarker(string From, string? To, bool ReopenSettings)
         }
 
         string? to = null;
-        var reopen = true;
         foreach (var line in lines.Skip(1))
         {
             var equals = line.IndexOf('=');
@@ -61,13 +54,9 @@ public sealed record UpdateMarker(string From, string? To, bool ReopenSettings)
             {
                 to = value;
             }
-            else if (key.Equals("open", StringComparison.OrdinalIgnoreCase))
-            {
-                reopen = !value.Equals("tray", StringComparison.OrdinalIgnoreCase);
-            }
         }
 
-        return new UpdateMarker(lines[0], to, reopen);
+        return new UpdateMarker(lines[0], to);
     }
 
     /// <summary>What happened, as seen by the copy running <paramref name="current"/>.</summary>

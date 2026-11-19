@@ -41,7 +41,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
             <StackPanel Margin="24,18,22,24">
                 <!-- Header -->
                 <DockPanel Margin="0,0,0,2">
@@ -247,7 +247,7 @@
                 </Border>
 
                 <!-- General -->
-                <TextBlock x:Name="GeneralHeader" Text="GENERAL" Style="{StaticResource SectionHeader}" />
+                <TextBlock Text="GENERAL" Style="{StaticResource SectionHeader}" />
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding RunAtStartup}">

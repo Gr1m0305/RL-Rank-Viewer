@@ -38,24 +38,6 @@ public partial class SettingsWindow : Window
         Top = Math.Max(area.Top + 16, area.Bottom - Height - 24);
     }
 
-    /// <summary>Scrolls down to General (the update line), now or once the window has laid out.</summary>
-    public void ShowUpdates()
-    {
-        if (!IsLoaded)
-        {
-            Loaded += (_, _) => Dispatcher.BeginInvoke(ScrollToGeneral, System.Windows.Threading.DispatcherPriority.Loaded);
-            return;
-        }
-
-        ScrollToGeneral();
-    }
-
-    private void ScrollToGeneral()
-    {
-        var top = GeneralHeader.TransformToAncestor(Scroller).Transform(new Point(0, 0)).Y;
-        Scroller.ScrollToVerticalOffset(Scroller.VerticalOffset + top - 12);
-    }
-
     private void UseDarkTitleBar()
     {
         var hwnd = new WindowInteropHelper(this).Handle;

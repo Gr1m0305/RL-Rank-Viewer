@@ -30,9 +30,9 @@ internal sealed record UpdateOptions(Uri Feed, bool Enabled, string? SetupSandbo
 /// GitHub lists it, and that it is this app at that version). The installed copy then installs it by itself the next
 /// time nothing is going on (Rocket League closed, no Preview, settings closed): setup runs quietly, replaces the exe
 /// and starts the new version, which says so in a notice. With "Update automatically" off, or for a copy that isn't
-/// the installed one, a notice says the update is ready and Settings → General installs it. An update installed from
-/// the settings window opens it again in the new version (see <see cref="UpdateMarker"/>); if setup fails, it starts
-/// the old copy again instead.
+/// the installed one, a notice says the update is ready and Settings → General installs it. Either way the new version
+/// starts in the notification area, as at sign-in, with no window open; if setup fails, it starts the old copy again
+/// instead (see <see cref="UpdateMarker"/>).
 /// </summary>
 /// <remarks>
 /// Only GitHub's API and this repository's release files are contacted, with a plain "RLOverlay/version" User-Agent;
@@ -52,7 +52,6 @@ internal sealed class UpdateService : IDisposable
     private readonly Func<bool> _isQuietMoment;
     private readonly Action<string, string> _notify;
     private readonly Action _quit;
-    private readonly Action _reopenSettings;
     private readonly ILogger _logger;
     private readonly DispatcherTimer _checkTimer = new();
     private readonly DispatcherTimer _installTimer = new() { Interval = InstallCheckInterval };
@@ -72,14 +71,13 @@ internal sealed class UpdateService : IDisposable
     private string? _failedTo;
 
     public UpdateService(UpdateOptions options, Func<bool> updateAutomatically, Func<bool> isQuietMoment, Action<string, string> notify, Action quit,
-        Action reopenSettings, ILogger<UpdateService> logger)
+        ILogger<UpdateService> logger)
     {
         _options = options;
         _updateAutomatically = updateAutomatically;
         _isQuietMoment = isQuietMoment;
         _notify = notify;
         _quit = quit;
-        _reopenSettings = reopenSettings;
         _logger = logger;
         UpdateFeed.TryParseVersion(AppInfo.Version, out _current);
         _checkTimer.Tick += async (_, _) =>
@@ -183,11 +181,9 @@ internal sealed class UpdateService : IDisposable
 
     /// <summary>
     /// Installs the downloaded version now. The installed copy runs setup quietly and quits (setup starts the new
-    /// version, which opens its settings again when <paramref name="reopenSettings"/>); any other copy opens the setup
-    /// window.
+    /// version in the notification area); any other copy opens the setup window.
     /// </summary>
-    /// <param name="reopenSettings">Started from the settings window (its Install button).</param>
-    public void InstallNow(bool reopenSettings = false)
+    public void InstallNow()
     {
         if (_readyPath is not { } setup || !File.Exists(setup) || _installing)
         {
@@ -205,11 +201,11 @@ internal sealed class UpdateService : IDisposable
         try
         {
             Directory.CreateDirectory(AppPaths.UpdatesDir);
-            var marker = new UpdateMarker(AppInfo.Version, _readyVersion?.ToString(3), reopenSettings);
+            var marker = new UpdateMarker(AppInfo.Version, _readyVersion?.ToString(3));
             File.WriteAllText(Path.Combine(AppPaths.UpdatesDir, UpdateMarker.FileName), marker.Format());
             Run(setup, $"--setup --quiet --launch --wait-for {Environment.ProcessId}{PassOn()}");
-            _logger.LogInformation("Updates: installing version {Version}; quitting so setup can replace the app (then {Then})",
-                _readyVersion?.ToString(3), reopenSettings ? "settings open again" : "back in the notification area");
+            _logger.LogInformation("Updates: installing version {Version}; quitting so setup can replace the app and start it again",
+                _readyVersion?.ToString(3));
             _quit();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
@@ -254,13 +250,13 @@ internal sealed class UpdateService : IDisposable
 
         if (_isQuietMoment())
         {
-            InstallNow(reopenSettings: false); // nothing was open: the new version starts in the notification area
+            InstallNow();
         }
     }
 
     /// <summary>
-    /// The copy that just started was put there by an update (or started again after a failed one): say so once, open
-    /// the settings window again if the update was started from it, and tidy the downloads folder.
+    /// The copy that just started was put there by an update (or started again after a failed one): say so once in a
+    /// notice (no window opens) and tidy the downloads folder.
     /// </summary>
     private void AnnounceFinishedUpdate()
     {
@@ -276,13 +272,8 @@ internal sealed class UpdateService : IDisposable
                     case UpdateOutcome.Updated:
                         _updatedFrom = marker.From;
                         _updatedAt = DateTime.Now;
-                        _logger.LogInformation("Updates: updated from {From} to {Version}{Reopen}", marker.From, AppInfo.Version,
-                            marker.ReopenSettings ? "; opening the settings again" : "");
-                        if (!marker.ReopenSettings)
-                        {
-                            _notify($"Updated to version {AppInfo.Version}", $"{AppInfo.Name} updated itself from version {marker.From}.");
-                        }
-
+                        _logger.LogInformation("Updates: updated from {From} to {Version}", marker.From, AppInfo.Version);
+                        _notify($"Updated to version {AppInfo.Version}", $"{AppInfo.Name} updated itself from version {marker.From}.");
                         break;
                     case UpdateOutcome.Failed:
                         _failedTo = marker.To;
@@ -290,11 +281,6 @@ internal sealed class UpdateService : IDisposable
                         _notify($"Version {marker.To} couldn't be installed",
                             $"{AppInfo.Name} is still on version {AppInfo.Version}. It tries again the next time it starts.");
                         break;
-                }
-
-                if (marker is { ReopenSettings: true } && marker.OutcomeFor(AppInfo.Version) != UpdateOutcome.None)
-                {
-                    _reopenSettings();
                 }
             }
 

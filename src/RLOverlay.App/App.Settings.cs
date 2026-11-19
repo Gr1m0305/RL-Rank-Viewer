@@ -19,10 +19,7 @@ public partial class App : ISettingsHost
     private bool _hotkeysSuspended;
 
     /// <summary>Opens the settings window, or brings it to the front if it is already open.</summary>
-    internal void OpenSettings() => OpenSettings(showUpdates: false);
-
-    /// <param name="showUpdates">Scrolled down to General (the update line), as after an update started from there.</param>
-    private void OpenSettings(bool showUpdates)
+    internal void OpenSettings()
     {
         if (_coordinator is null)
         {
@@ -37,20 +34,10 @@ public partial class App : ISettingsHost
             }
 
             open.Activate();
-            if (showUpdates)
-            {
-                open.ShowUpdates();
-            }
-
             return;
         }
 
         _settingsWindow = new SettingsWindow(new SettingsViewModel(this));
-        if (showUpdates)
-        {
-            _settingsWindow.ShowUpdates();
-        }
-
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
         _settingsWindow.Activate();
@@ -235,8 +222,8 @@ public partial class App : ISettingsHost
 
     void ISettingsHost.InstallUpdate()
     {
-        _settingsWindow?.Close(); // its edits are saved or dropped like any close; the overlay restarts with it open again
-        _updates?.InstallNow(reopenSettings: true);
+        _settingsWindow?.Close(); // its edits are saved or dropped like any close; the overlay restarts in the notification area
+        _updates?.InstallNow();
     }
 
     (string Summary, IReadOnlyList<StatsApiFileStatus> Files) ISettingsHost.StatsApiStatus()
