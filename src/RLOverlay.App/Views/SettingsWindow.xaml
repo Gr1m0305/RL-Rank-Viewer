@@ -209,16 +209,26 @@
                             <RowDefinition Height="12" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <TextBlock Grid.ColumnSpan="3" Style="{StaticResource Hint}" Foreground="{StaticResource TextPrimary}"
-                                   Text="Drag the screen's header to move it and drag any corner to resize it, in a match or with Preview on. It starts in the top-right corner of the game's screen." />
-                        <TextBlock Grid.Row="2" Text="Size" Style="{StaticResource Label}" />
-                        <Slider Grid.Row="2" Grid.Column="1" Style="{StaticResource SliderStyle}" Minimum="{Binding MinScalePercent}" Maximum="{Binding MaxScalePercent}"
+                                   Text="Drag the screen's header to move it and drag any corner to resize it, in a match or with Preview on. It starts in the top-right corner of the screen picked below: the one Rocket League is on, unless you choose another." />
+                        <TextBlock Grid.Row="2" Text="Screen" Style="{StaticResource Label}" />
+                        <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Style="{StaticResource Combo}" ItemsSource="{Binding Screens}"
+                                  SelectedItem="{Binding SelectedScreen}" VerticalAlignment="Center" AutomationProperties.Name="Screen">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:ScreenOption}">
+                                    <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Grid.Row="3" Text="Size" Style="{StaticResource Label}" Margin="0,14,0,0" />
+                        <Slider Grid.Row="3" Grid.Column="1" Style="{StaticResource SliderStyle}" Minimum="{Binding MinScalePercent}" Maximum="{Binding MaxScalePercent}"
                                 SmallChange="1" LargeChange="5" TickFrequency="1" IsSnapToTickEnabled="True"
-                                Value="{Binding ScalePercent}" VerticalAlignment="Center" />
-                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding ScaleText}" Style="{StaticResource Label}" HorizontalAlignment="Right"
-                                   Typography.NumeralAlignment="Tabular" />
-                        <DockPanel Grid.Row="3" Grid.ColumnSpan="3" Margin="0,12,0,0">
+                                Value="{Binding ScalePercent}" VerticalAlignment="Center" Margin="0,14,0,0" />
+                        <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding ScaleText}" Style="{StaticResource Label}" HorizontalAlignment="Right"
+                                   Typography.NumeralAlignment="Tabular" Margin="0,14,0,0" />
+                        <DockPanel Grid.Row="4" Grid.ColumnSpan="3" Margin="0,12,0,0">
                             <Button DockPanel.Dock="Right" Content="Reset to top right" Style="{StaticResource LinkButton}" Command="{Binding ResetPositionCommand}" />
                             <TextBlock Text="{Binding PlacementText}" Style="{StaticResource Hint}" />
                         </DockPanel>

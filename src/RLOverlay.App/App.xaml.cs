@@ -260,7 +260,7 @@ public partial class App : Application
         _window.Panel = _panelView;
         _window.Strip = new PlaylistStripView { DataContext = _panel.Strip };
         _window.EnsureHandle();
-        _window.Configure(() => _tracker.FindGameWindow(), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
+        _window.Configure(ScreenFor(_settings.Screen), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
         _window.PlacementChanged += OnPlacementChanged;
 
         _coordinator = new OverlayCoordinator(_settings, _panel, _window, LoggerFactory.CreateLogger<OverlayCoordinator>())

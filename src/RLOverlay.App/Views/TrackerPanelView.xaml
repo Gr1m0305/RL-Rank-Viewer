@@ -63,6 +63,33 @@
                         <TextBlock Text="Hide" FontSize="11" Foreground="{StaticResource TextSecondary}"
                                    VerticalAlignment="Center" Margin="1,0,0,0" />
                     </StackPanel>
+                    <!-- Loads every player's tracker.gg page again. A press on it is a click, not the start of a drag. -->
+                    <Button x:Name="RefreshButton" DockPanel.Dock="Right" Margin="16,0,0,0" VerticalAlignment="Center"
+                            Focusable="False" Cursor="Hand" IsEnabled="False"
+                            ToolTip="Load every player's tracker.gg page again"
+                            ov:OverlayHit.IsInteractive="True" Click="OnRefreshClick">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="Chrome" CornerRadius="5" Padding="7,2,8,3" Background="Transparent"
+                                        BorderBrush="{StaticResource KeyCapBorder}" BorderThickness="1">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="↻" FontSize="12.5" Margin="0,0,5,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextSecondary}" />
+                                        <TextBlock Text="Refresh" FontSize="11" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource TextSecondary}" />
+                                    </StackPanel>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="ov:OverlayHit.IsHovered" Value="True">
+                                        <Setter TargetName="Chrome" Property="Background" Value="{StaticResource KeyCapBackground}" />
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                     <Border Width="22" Height="22" CornerRadius="6" Background="{StaticResource AppBadgeBrush}" VerticalAlignment="Center">
                         <TextBlock Text="R" FontSize="12" FontWeight="Bold" Foreground="White"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />

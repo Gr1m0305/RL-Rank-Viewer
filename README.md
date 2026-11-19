@@ -21,7 +21,8 @@ tracker.gg page. The repository holds no screenshots of tracker.gg pages because
 | `Ctrl+R` | Show / hide the lobby (works during the match too, where the next kickoff hides it again, and after the match) |
 | `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Heatseeker, Tournaments, Casual. Every row moves at once, without reloading |
 | Click a name | Opens that player's tracker.gg profile in your browser |
-| Drag the header | Moves the panel anywhere on the game's screen (the dotted grip on the right shows where to grab) |
+| Drag the header | Moves the panel anywhere on its screen (the dotted grip on the right shows where to grab) |
+| *Refresh* (header) | Loads every player's tracker.gg page again, for example when ranks moved since the pages loaded |
 | Drag a corner | Resizes the panel, from 75 % to 150 % (blue brackets show the corners when the pointer is over them) |
 
 The shortcuts can be changed in Settings and only work while Rocket League is the window in front.
@@ -53,7 +54,10 @@ The app finds the row and tiles by their names and measures their size so every 
 reads the numbers, so nothing is stored, cached or sent anywhere else.
 
 * Pages start loading as soon as a player joins, so they are usually ready by the time you look. A shimmer marks
-  rows still loading; ↻ under a name loads that page again. At the next match, pages older than a minute reload.
+  rows still loading; *Refresh* in the header loads every player's page again at once (it is greyed out while there
+  is nothing to reload). At the next match, pages older than a minute reload by themselves.
+* Each name has its platform's mark in front of it: Steam, Epic Games, PlayStation, Xbox or Nintendo Switch. Bots
+  say *BOT*.
 * *No Hoops rating on tracker.gg* (for example): that player has no row for that playlist. *Not found on
   tracker.gg*: there is no profile under that name. Bots and split-screen guests have no profile.
 * If a player's page has no cell that others have (a new player without a peak, say), their row leaves a gap there so
@@ -141,6 +145,8 @@ Stats API on.
 ## In a match
 
 * Load into any match: the lobby slides in at the top right of the game's screen and fills in as players arrive.
+  To keep it on another screen (a second monitor, say), pick that screen in Settings → *Position and size* →
+  *Screen*. If that screen is unplugged, the lobby goes back to the game's screen until it is connected again.
 * Drag the header to move it and drag any corner to make it bigger or smaller (it won't go below 75 % or above
   150 %). The panel follows the pointer once per frame your screen shows (from 0.5.1; before, it moved in jerky
   steps about 55 times a second). Where you leave it is saved straight away and used for every match after.
@@ -241,7 +247,7 @@ dotnet test RLOverlay.sln
 | Lobby never appears | Settings → *Game connection*: is the Stats API **On**? Restart the game after enabling it. Make sure the game is Borderless/Windowed. Check the logs (tray → *Open logs folder*). |
 | "Waiting for the Stats API" while the game runs | The game was started before the ini was changed (restart it), or the port differs: leave *Stats API port* empty to read it from the ini. |
 | Rows say *Needs the Microsoft Edge WebView2 Runtime* | Install the WebView2 Runtime from Microsoft, then restart the app. |
-| A row shows tracker.gg's whole page | The playlist row didn't appear within 12 s: tracker.gg is slow, or shows a browser check or notice. Do what the page asks in that row; the row appears once the page has loaded. ↻ loads it again. |
+| A row shows tracker.gg's whole page | The playlist row didn't appear within 12 s: tracker.gg is slow, or shows a browser check or notice. Do what the page asks in that row; the row appears once the page has loaded. *Refresh* loads it again. |
 | *Not found on tracker.gg* for someone you know is there | Console and Epic players are found by the name the game shows; if their tracker.gg profile uses another name, click their name and search on tracker.gg. |
 | A stat tile is missing for one player | Their tracker.gg page doesn't show that tile (yet). The others still line up. |
 | Shortcuts do nothing | They only work while Rocket League is in front. If another app already uses the combination, the log says so; pick another in Settings. |
@@ -277,4 +283,7 @@ Either way the ini backups stay next to the game's ini files and the Stats API s
 Rank artwork belongs to Psyonix and is **not** included in the repository or the exe. The only rank images the app
 ever shows are the ones on tracker.gg's own pages, inside the built-in browser while it runs. The screenshots in
 `docs/screenshots` use made-up players and placeholders. The bundled Inter font is licensed under the SIL Open Font
-License 1.1 (`licenses/Inter-OFL.txt`).
+License 1.1 (`licenses/Inter-OFL.txt`). The platform marks next to the names are from
+[Simple Icons](https://simpleicons.org) (CC0 1.0; Xbox from release 7.0.0, as later releases no longer include it).
+They are trademarks of Valve, Epic Games, Sony Interactive Entertainment, Microsoft and Nintendo, used only to show
+which platform a player is on.

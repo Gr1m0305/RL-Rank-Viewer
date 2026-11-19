@@ -17,6 +17,12 @@ internal sealed class SampleSettingsHost : ISettingsHost
 
     public string ConnectionStatus => "Connected to Rocket League (port 49123).";
 
+    public IReadOnlyList<ScreenInfo> Screens() =>
+    [
+        new(@"\\.\DISPLAY1", null, new PixelRect(0, 0, 1920, 1080), true),
+        new(@"\\.\DISPLAY2", null, new PixelRect(-1920, 0, 1920, 1080), false),
+    ];
+
     public void SetPreview(bool on, OverlaySettings settings)
     {
     }

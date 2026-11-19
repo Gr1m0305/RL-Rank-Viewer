@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -38,7 +39,7 @@ public partial class OverlayWindow : Window
     private Func<(int X, int Y, bool Down)>? _simulatedCursor;
     private readonly List<long> _moves = [];
     private IntPtr _hwnd;
-    private Func<IntPtr>? _gameWindow;
+    private Func<PixelRect>? _screen;
     private double _offsetX;
     private double _offsetY;
     private bool _wantVisible;
@@ -118,9 +119,10 @@ public partial class OverlayWindow : Window
         return _hwnd;
     }
 
-    public void Configure(Func<IntPtr> gameWindow, double offsetX, double offsetY, double scale)
+    /// <summary>Where and how big: <paramref name="screen"/> says which screen (asked on every placement).</summary>
+    public void Configure(Func<PixelRect> screen, double offsetX, double offsetY, double scale)
     {
-        _gameWindow = gameWindow;
+        _screen = screen;
         _offsetX = offsetX;
         _offsetY = offsetY;
         Scale.ScaleX = Scale.ScaleY = Math.Clamp(scale, OverlaySettings.MinScale, OverlaySettings.MaxScale);
@@ -256,7 +258,7 @@ public partial class OverlayWindow : Window
         }
     }
 
-    /// <summary>Top-right corner of the game's monitor (primary monitor if the game is not found), plus the user offset.</summary>
+    /// <summary>Top-right corner of the chosen screen (by default the game's, else the main one), plus the user offset.</summary>
     public void Reposition()
     {
         if (_hwnd == IntPtr.Zero || ActualWidth <= 0)
@@ -285,11 +287,7 @@ public partial class OverlayWindow : Window
         }
     }
 
-    private PixelRect Monitor()
-    {
-        var game = _gameWindow?.Invoke() ?? IntPtr.Zero;
-        return game != IntPtr.Zero ? MonitorInfo.BoundsFor(game) : MonitorInfo.BoundsFor(IntPtr.Zero);
-    }
+    private PixelRect Monitor() => _screen?.Invoke() ?? MonitorInfo.Primary();
 
     /// <summary>Where a drag started: cursor, window rectangle (physical pixels), scale and what is being dragged.</summary>
     private sealed record DragStart(
@@ -300,6 +298,11 @@ public partial class OverlayWindow : Window
         var kind = OverlayDrag.None;
         for (var d = e.OriginalSource as DependencyObject; d is not null && kind == OverlayDrag.None; d = Parent(d))
         {
+            if (d is ButtonBase)
+            {
+                return; // a button in the header (Refresh) is clicked, not dragged
+            }
+
             kind = OverlayHit.GetDrag(d);
         }
 

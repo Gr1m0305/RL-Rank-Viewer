@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using Microsoft.Extensions.Logging;
+using RLOverlay.App.Native;
 using RLOverlay.App.Services;
 using RLOverlay.App.ViewModels;
 using RLOverlay.App.Views;
@@ -45,6 +46,8 @@ public partial class App : ISettingsHost
     OverlaySettings ISettingsHost.Current => _settings;
 
     bool ISettingsHost.RunAtStartup => _startup?.IsEnabled == true;
+
+    IReadOnlyList<ScreenInfo> ISettingsHost.Screens() => Screens.All(withNames: true);
 
     string ISettingsHost.ConnectionStatus
     {
@@ -127,8 +130,22 @@ public partial class App : ISettingsHost
     {
         _coordinator!.ApplySettings(settings);
         _panelView!.SetZoom(Math.Clamp(settings.Scale, OverlaySettings.MinScale, OverlaySettings.MaxScale));
-        _window!.Configure(() => _tracker!.FindGameWindow(), settings.OffsetX, settings.OffsetY, settings.Scale);
+        _window!.Configure(ScreenFor(settings.Screen), settings.OffsetX, settings.OffsetY, settings.Scale);
     }
+
+    /// <summary>
+    /// The overlay's screen for a Screen setting: that screen while it is connected, else the one Rocket League is on,
+    /// else the main screen (see <see cref="ScreenChoice.Pick"/>).
+    /// </summary>
+    private Func<PixelRect> ScreenFor(string? chosen) => () => ScreenChoice.Pick(
+        chosen,
+        chosen is null ? [] : Screens.All(),
+        () =>
+        {
+            var game = _tracker?.FindGameWindow() ?? IntPtr.Zero;
+            return game != IntPtr.Zero ? MonitorInfo.BoundsFor(game) : null;
+        },
+        MonitorInfo.Primary());
 
     /// <summary>
     /// The screen was dragged or resized. During the Preview that goes into the settings being edited (Save keeps it,
@@ -150,7 +167,7 @@ public partial class App : ISettingsHost
         _settings = settings.Normalize();
         _store!.Save(_settings);
         _panelView!.SetZoom(_settings.Scale);
-        _window!.Configure(() => _tracker!.FindGameWindow(), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
+        _window!.Configure(ScreenFor(_settings.Screen), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
         editor?.PlacementSaved(_settings.OffsetX, _settings.OffsetY, _settings.Scale);
         _log.LogInformation("Screen moved to {X}, {Y} from the top-right corner at {Size:0} %", _settings.OffsetX, _settings.OffsetY, _settings.Scale * 100);
     }
@@ -160,7 +177,7 @@ public partial class App : ISettingsHost
         var old = _settings;
         _settings = settings;
         _store!.Save(settings);
-        _log.LogInformation("Settings saved");
+        _log.LogInformation("Settings saved (screen: {Screen})", settings.Screen ?? "Rocket League's");
 
         ApplyLook(settings);
         ApplyHotkeyBindings();

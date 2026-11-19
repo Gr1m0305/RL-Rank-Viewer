@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
@@ -66,6 +67,10 @@ internal sealed class TrackerRowView : Grid, IDisposable
     public const double ViewportWidth = 1024;
 
     private const double LoadingHeight = 720;
+
+    /// <summary>Width of the platform mark, name and status line in front of the band.</summary>
+    private const double InfoWidth = 214;
+    private const double IconSize = 15;
     private const double PlaceholderWidth = 640;
     private const double RowHeight = 51;
     private const double TileRowHeight = 69;
@@ -87,11 +92,11 @@ internal sealed class TrackerRowView : Grid, IDisposable
     private readonly bool _sample;
     private readonly Border _nameHit;
     private readonly TextBlock _name;
+    private readonly System.Windows.Shapes.Path _platform;
     private readonly TextBlock _arrow;
     private readonly TextBlock _badge;
     private readonly Border _badgeBox;
     private readonly TextBlock _note;
-    private readonly Button _reload;
     private readonly Border _band;
     private readonly Canvas _clip;
     private readonly Border _scaler;
@@ -146,20 +151,33 @@ internal sealed class TrackerRowView : Grid, IDisposable
         _url = sample ? null : TrackerUrls.Profile(player.Id);
 
         Margin = new Thickness(0, 0, 0, 6);
-        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(196) });
+        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(InfoWidth) });
         ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        // Name (+ platform badge), then a status line with a reload button.
+        // Platform mark, name (+ BOT for bots), then a status line. Pages are loaded again with the header's Refresh.
         var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
         Children.Add(info);
 
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
         info.Children.Add(nameLine);
+
+        // Every row keeps the mark's space (empty for bots), so the names start in one line.
+        _platform = new System.Windows.Shapes.Path
+        {
+            Width = IconSize,
+            Height = IconSize,
+            Stretch = Stretch.Uniform,
+            Fill = Brush("TextSecondary"),
+            Margin = new Thickness(0, 1, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = Visibility.Hidden,
+        };
+        nameLine.Children.Add(_platform);
         _name = new TextBlock
         {
-            FontSize = 14.5,
+            FontSize = 17,
             FontWeight = FontWeights.SemiBold,
-            MaxWidth = 132,
+            MaxWidth = 158,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -180,7 +198,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
         _arrow = new TextBlock
         {
             Text = "↗",
-            FontSize = 12,
+            FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -198,24 +216,9 @@ internal sealed class TrackerRowView : Grid, IDisposable
             Foreground = Brush("TextSecondary"),
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-            MaxWidth = 128,
+            MaxWidth = InfoWidth - 16,
         };
         noteLine.Children.Add(_note);
-        _reload = new Button
-        {
-            Content = "↻",
-            FontSize = 12,
-            Padding = new Thickness(5, 0, 5, 1),
-            Margin = new Thickness(4, 0, 0, 0),
-            ToolTip = "Load the page again",
-            Visibility = Visibility.Collapsed,
-            Focusable = false,
-            Template = ReloadButtonTemplate(),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        OverlayHit.SetIsInteractive(_reload, true);
-        _reload.Click += (_, _) => Reload();
-        noteLine.Children.Add(_reload);
 
         if (_url is not null)
         {
@@ -290,6 +293,9 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
     public TrackerRowState State { get; private set; }
 
+    /// <summary>False for bots, split-screen guests and Preview samples: no tracker.gg page to load.</summary>
+    public bool HasProfile => _url is not null;
+
     /// <summary>Width of the shown row (panel units), or null while no row is shown.</summary>
     public double? CropWidth => State switch
     {
@@ -322,13 +328,20 @@ internal sealed class TrackerRowView : Grid, IDisposable
         ApplySize();
     }
 
-    /// <summary>Name, badge, team (the team can change after joining) and whether the player left the match.</summary>
+    /// <summary>Name, platform, team (the team can change after joining) and whether the player left the match.</summary>
     public void Update(LobbyPlayer player)
     {
         Player = player;
         _name.Text = player.Name;
-        _badge.Text = string.Join(" ", player.Id.BadgeText.ToCharArray());
-        _badgeBox.Visibility = player.Id.BadgeText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var icon = PlatformIcons.For(player.Id.Platform);
+        _platform.Data = icon;
+        _platform.Visibility = icon is not null ? Visibility.Visible : Visibility.Hidden;
+        AutomationProperties.SetName(_platform, PlatformIcons.Name(player.Id.Platform));
+
+        // A platform with a mark shows the mark; the text stays only for bots.
+        var text = icon is null ? player.Id.BadgeText : "";
+        _badge.Text = string.Join(" ", text.ToCharArray());
+        _badgeBox.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         // Someone who quit stays on the board until the next game, faded and marked.
         Opacity = player.HasLeft ? 0.55 : 1;
@@ -744,7 +757,6 @@ internal sealed class TrackerRowView : Grid, IDisposable
             _ => "",
         };
         ShowNote();
-        _reload.Visibility = _url is not null && state != TrackerRowState.Loading ? Visibility.Visible : Visibility.Collapsed;
         _cover.Visibility = showsPage ? Visibility.Collapsed : Visibility.Visible;
         if (_web is not null)
         {
@@ -946,23 +958,6 @@ internal sealed class TrackerRowView : Grid, IDisposable
     }
 
     private static Brush Brush(string key) => (Brush)Application.Current.FindResource(key);
-
-    private static ControlTemplate ReloadButtonTemplate()
-    {
-        var border = new FrameworkElementFactory(typeof(Border));
-        border.Name = "Chrome";
-        border.SetValue(Border.BackgroundProperty, Brushes.Transparent);
-        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
-        border.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
-        var text = new FrameworkElementFactory(typeof(ContentPresenter));
-        text.SetValue(TextElement.ForegroundProperty, Application.Current.FindResource("TextSecondary"));
-        border.AppendChild(text);
-        var template = new ControlTemplate(typeof(Button)) { VisualTree = border };
-        var hover = new Trigger { Property = OverlayHit.IsHoveredProperty, Value = true };
-        hover.Setters.Add(new Setter(Border.BackgroundProperty, Application.Current.FindResource("KeyCapBackground"), "Chrome"));
-        template.Triggers.Add(hover);
-        return template;
-    }
 
     public void Dispose()
     {

@@ -306,7 +306,33 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     {
         AlignColumns();
         AlignTextBands();
+        UpdateRefreshButton();
     }
+
+    private void OnRefreshClick(object sender, RoutedEventArgs e) => RefreshAll();
+
+    /// <summary>
+    /// The header's Refresh: loads every player's page again, so new ranks show without waiting for the next match.
+    /// Rows already loading, bots, split-screen guests and Preview samples are left alone.
+    /// </summary>
+    /// <returns>How many pages were reloaded.</returns>
+    internal int RefreshAll()
+    {
+        var due = _rows.Values.Where(Refreshable).ToList();
+        foreach (var row in due)
+        {
+            row.Reload();
+        }
+
+        _logger.LogInformation("Overlay: refreshing {Count} player page(s)", due.Count);
+        UpdateRefreshButton();
+        return due.Count;
+    }
+
+    private static bool Refreshable(TrackerRowView row) => row.HasProfile && row.State != TrackerRowState.Loading;
+
+    /// <summary>Greyed out while there is nothing to reload (empty lobby, everything still loading, Preview).</summary>
+    private void UpdateRefreshButton() => RefreshButton.IsEnabled = _rows.Values.Any(Refreshable);
 
     /// <summary>
     /// Every player's page lays its table out on its own, so the columns land in different places. Each row reports its

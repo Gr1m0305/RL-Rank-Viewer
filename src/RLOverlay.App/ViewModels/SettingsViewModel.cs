@@ -19,6 +19,9 @@ public interface ISettingsHost
     /// <summary>"Connected to Rocket League" / "Waiting for Rocket League" / "Demo".</summary>
     string ConnectionStatus { get; }
 
+    /// <summary>The screens connected now, for the Screen choice.</summary>
+    IReadOnlyList<ScreenInfo> Screens();
+
     /// <summary>Starts or stops the on-screen Preview (made-up lobby) using these settings.</summary>
     void SetPreview(bool on, OverlaySettings settings);
 
@@ -67,6 +70,9 @@ public sealed partial class ColumnOption(string key, string label, bool isOn) : 
     private bool _isOn = isOn;
 }
 
+/// <summary>One entry of the Screen choice: a device name (null = Rocket League's screen) and its label.</summary>
+public sealed record ScreenOption(string? DeviceName, string Label);
+
 /// <summary>One row of the "Game connection" file list.</summary>
 public sealed record StatsApiFileRow(string Path, string State, bool IsOn);
 
@@ -79,7 +85,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     private static readonly string[] LiveProperties =
     [
         nameof(OffsetX), nameof(OffsetY), nameof(ScalePercent), nameof(ToggleHotkey), nameof(CycleHotkey), nameof(DefaultPlaylist),
+        nameof(SelectedScreen),
     ];
+
+    /// <summary>The first Screen entry, and the default.</summary>
+    public const string GameScreenLabel = "Rocket League's screen";
 
     private readonly ISettingsHost _host;
     private readonly OverlaySettings _original;
@@ -117,6 +127,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _offsetX = _original.OffsetX;
         _offsetY = _original.OffsetY;
         _scalePercent = Math.Round(_original.Scale * 100);
+        Screens = BuildScreenOptions(host.Screens(), _original.Screen);
+        _selectedScreen = Screens.FirstOrDefault(o => string.Equals(o.DeviceName, _original.Screen, StringComparison.OrdinalIgnoreCase)) ?? Screens[0];
         _notifyWhenGameStarts = _original.NotifyWhenGameStarts;
         _updateAutomatically = _original.UpdateAutomatically;
         _runAtStartup = host.RunAtStartup;
@@ -144,6 +156,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<ColumnOption> Columns { get; }
 
     public ObservableCollection<StatsApiFileRow> StatsApiFiles { get; } = [];
+
+    /// <summary>Rocket League's screen first, then every connected screen (and the saved one if it is unplugged).</summary>
+    public IReadOnlyList<ScreenOption> Screens { get; }
+
+    [ObservableProperty]
+    private ScreenOption? _selectedScreen;
 
     public double MinScalePercent => OverlaySettings.MinScale * 100;
 
@@ -283,6 +301,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         s.OffsetX = Math.Round(OffsetX);
         s.OffsetY = Math.Round(OffsetY);
         s.Scale = Math.Round(ScalePercent) / 100;
+        s.Screen = SelectedScreen?.DeviceName;
         s.NotifyWhenGameStarts = NotifyWhenGameStarts;
         s.UpdateAutomatically = UpdateAutomatically;
         s.StatsApiPort = int.TryParse(PortText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var port) ? port : null;
@@ -488,6 +507,20 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             _host.PreviewSettings(Build());
         }
+    }
+
+    private static List<ScreenOption> BuildScreenOptions(IReadOnlyList<ScreenInfo> screens, string? saved)
+    {
+        var options = new List<ScreenOption> { new(null, GameScreenLabel) };
+        options.AddRange(screens.Select(s => new ScreenOption(s.DeviceName, s.Label)));
+        if (saved is not null && ScreenChoice.Find(saved, screens) is null)
+        {
+            // Unplugged for now: kept, so saving doesn't lose the choice (the overlay uses the game's screen meanwhile).
+            var number = new ScreenInfo(saved, null, default, false).Number;
+            options.Add(new ScreenOption(saved, (number is { } n ? $"Screen {n}" : saved) + " · not connected"));
+        }
+
+        return options;
     }
 
     private static string Display(string? text, string fallback) =>

@@ -44,6 +44,13 @@ public sealed class OverlaySettings
 
     public double Scale { get; set; } = DefaultScale;
 
+    /// <summary>
+    /// Windows' device name of the screen the overlay is shown on (<c>\\.\DISPLAY2</c>); null = the screen Rocket League
+    /// is on (the default). A chosen screen that isn't connected falls back to the game's screen (see
+    /// <see cref="ScreenChoice"/>).
+    /// </summary>
+    public string? Screen { get; set; }
+
     // General
     public bool RunAtStartup { get; set; }
 
@@ -66,6 +73,7 @@ public sealed class OverlaySettings
         Scale = double.IsFinite(Scale) ? Math.Clamp(Scale, MinScale, MaxScale) : DefaultScale;
         OffsetX = double.IsFinite(OffsetX) ? Math.Clamp(OffsetX, -4000, 4000) : 0;
         OffsetY = double.IsFinite(OffsetY) ? Math.Clamp(OffsetY, -4000, 4000) : 0;
+        Screen = string.IsNullOrWhiteSpace(Screen) ? null : Screen.Trim();
         EnabledPlaylists = (EnabledPlaylists ?? []).Where(Enum.IsDefined).Distinct().OrderBy(p => p).ToList();
         if (EnabledPlaylists.Count == 0)
         {
