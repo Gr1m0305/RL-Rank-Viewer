@@ -97,12 +97,12 @@ public sealed class FavouriteList
     private static string NameOf(PlatformId id) => id.DisplayName.Trim() is { Length: > 0 } name ? name : id.Uid.Trim();
 }
 
-/// <summary>The favourites screen shows the list a page at a time: 5, 10 or 20 players per page.</summary>
+/// <summary>The favourites screen shows the list a page at a time: 5 or 10 players per page.</summary>
 public static class FavouritePages
 {
     public const int DefaultSize = 5;
 
-    public static IReadOnlyList<int> Sizes { get; } = [5, 10, 20];
+    public static IReadOnlyList<int> Sizes { get; } = [5, 10];
 
     /// <summary>A page size from a settings file: one of <see cref="Sizes"/>, else the default.</summary>
     public static int NormalizeSize(int perPage) => Sizes.Contains(perPage) ? perPage : DefaultSize;

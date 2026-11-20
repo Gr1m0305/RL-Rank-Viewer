@@ -197,8 +197,6 @@
                                 AutomationProperties.Name="5 per page" />
                         <Button x:Name="PerPage10" Style="{StaticResource PageButton}" Content="10" Tag="10" Click="OnPerPageClick"
                                 AutomationProperties.Name="10 per page" />
-                        <Button x:Name="PerPage20" Style="{StaticResource PageButton}" Content="20" Tag="20" Click="OnPerPageClick"
-                                AutomationProperties.Name="20 per page" />
                     </StackPanel>
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0"
                                 Visibility="{Binding HasFavourites, Converter={StaticResource BoolToVisibility}}">

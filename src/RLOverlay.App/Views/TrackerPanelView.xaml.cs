@@ -168,7 +168,7 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     /// <summary>The chosen page size stands out (gold edge, bright number).</summary>
     private void ShowPageSize()
     {
-        foreach (var button in new[] { PerPage5, PerPage10, PerPage20 })
+        foreach (var button in new[] { PerPage5, PerPage10 })
         {
             var chosen = _vm is not null && button.Tag is string tag && tag == _vm.PerPage.ToString(System.Globalization.CultureInfo.InvariantCulture);
             button.BorderBrush = (Brush)FindResource(chosen ? "FavouriteGold" : "KeyCapBorder");

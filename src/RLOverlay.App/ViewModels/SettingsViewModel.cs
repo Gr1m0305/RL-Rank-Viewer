@@ -204,7 +204,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     /// <summary>Under the FAVOURITES card, with the shortcut as edited.</summary>
     public string FavouritesHint =>
-        $"Click the star next to a name in the lobby to save that player; {FavouritesHotkey} shows everyone you saved. 20 per page makes a tall screen.";
+        $"{FavouritesHotkey} shows everyone you saved with the star next to their name in the lobby.";
 
     /// <summary>"toggle" / "cycle" / "favourites" while that shortcut is being recorded, else null.</summary>
     [ObservableProperty]

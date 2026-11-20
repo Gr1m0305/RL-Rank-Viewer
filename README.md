@@ -177,8 +177,8 @@ since tracker.gg has no profile for them.
 
 `Ctrl+F` (or clicking *Favourites* in the header) opens the favourites screen in place of the lobby: every saved
 player's tracker.gg row for the selected playlist, newest first, **5 per page**. Use **‹ ›** at the bottom to turn the
-pages and **5 / 10 / 20** to show more at once; the choice is kept, and is also in Settings → *Favourites*. 20 per
-page makes a tall screen, so you may want to shrink it a little by dragging a corner. `Ctrl+G` switches the playlist
+pages and **5 / 10** to show more at once; the choice is kept, and is also in Settings → *Favourites*. `Ctrl+G`
+switches the playlist
 here too, a star clicked off stays on the page until you turn it (so a slip can be undone), and clicking a name opens
 the full profile. `Ctrl+F` again closes it and the lobby comes back; `Ctrl+R` goes straight to the lobby. The
 favourites also close at kickoff and when a new lobby loads.
