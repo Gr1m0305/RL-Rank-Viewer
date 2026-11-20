@@ -225,12 +225,12 @@ size, GitHub's SHA-256 checksum, and that it really is this app at that version.
 files are accepted, and nothing about you is sent (the request carries only `RLOverlay/<version>`).
 
 With **Update automatically** on (the default), the installed copy installs the update the next time Rocket League
-is closed: setup runs without a window, replaces the app and starts the new version, which shows a short *Updated to
-version …* notice. It never installs in the middle of a game. With it off, or when running a copy that isn't the
-installed one, a notice says the update is ready. Settings → *General* shows what the updater found and has
+is closed: setup runs without a window, replaces the app and starts the new version. It never installs in the middle
+of a game. With it off, or when running a copy that isn't the installed one, the update waits in Settings →
+*General*. Updates never pop up a notice: Settings → *General* shows what the updater found and last did, and has
 **Check for updates** and **Install … now**. After an update the overlay starts again by itself as the new version,
-in the notification area with no window open, and a notice says it was updated. If an update can't be installed, the
-old version starts again and says so (it tries again the next time it starts).
+in the notification area with no window open. If an update can't be installed, the old version starts again
+(Settings → *General* says so; it tries again the next time it starts).
 
 ## Try it without the game
 

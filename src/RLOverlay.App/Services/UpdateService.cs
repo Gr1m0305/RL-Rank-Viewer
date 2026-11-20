@@ -29,10 +29,10 @@ internal sealed record UpdateOptions(Uri Feed, bool Enabled, string? SetupSandbo
 /// the latest release; a newer one's setup file is downloaded into the data folder and checked (size, SHA-256 when
 /// GitHub lists it, and that it is this app at that version). The installed copy then installs it by itself the next
 /// time nothing is going on (Rocket League closed, no Preview, settings closed): setup runs quietly, replaces the exe
-/// and starts the new version, which says so in a notice. With "Update automatically" off, or for a copy that isn't
-/// the installed one, a notice says the update is ready and Settings → General installs it. Either way the new version
-/// starts in the notification area, as at sign-in, with no window open; if setup fails, it starts the old copy again
-/// instead (see <see cref="UpdateMarker"/>).
+/// and starts the new version. With "Update automatically" off, or for a copy that isn't the installed one, the update
+/// waits in Settings → General, which installs it. Either way the new version starts in the notification area, as at
+/// sign-in, with no window and no pop-up (Settings → General says what happened); if setup fails, it starts the old
+/// copy again instead (see <see cref="UpdateMarker"/>).
 /// </summary>
 /// <remarks>
 /// Only GitHub's API and this repository's release files are contacted, with a plain "RLOverlay/version" User-Agent;
@@ -50,7 +50,6 @@ internal sealed class UpdateService : IDisposable
     private readonly UpdateOptions _options;
     private readonly Func<bool> _updateAutomatically;
     private readonly Func<bool> _isQuietMoment;
-    private readonly Action<string, string> _notify;
     private readonly Action _quit;
     private readonly ILogger _logger;
     private readonly DispatcherTimer _checkTimer = new();
@@ -61,22 +60,20 @@ internal sealed class UpdateService : IDisposable
     private string? _problem;
     private string? _readyPath;
     private Version? _readyVersion;
-    private Version? _announced;
     private bool _installing;
     private bool _disposed;
 
-    // What the note left by the copy before this one said (see AnnounceFinishedUpdate).
+    // What the note left by the copy before this one said (see ReadFinishedUpdate).
     private string? _updatedFrom;
     private DateTime _updatedAt;
     private string? _failedTo;
 
-    public UpdateService(UpdateOptions options, Func<bool> updateAutomatically, Func<bool> isQuietMoment, Action<string, string> notify, Action quit,
+    public UpdateService(UpdateOptions options, Func<bool> updateAutomatically, Func<bool> isQuietMoment, Action quit,
         ILogger<UpdateService> logger)
     {
         _options = options;
         _updateAutomatically = updateAutomatically;
         _isQuietMoment = isQuietMoment;
-        _notify = notify;
         _quit = quit;
         _logger = logger;
         UpdateFeed.TryParseVersion(AppInfo.Version, out _current);
@@ -128,7 +125,7 @@ internal sealed class UpdateService : IDisposable
     /// <summary>Starts the regular checks (the first after <paramref name="firstCheck"/>) and cleans up after an update.</summary>
     public void Start(TimeSpan firstCheck)
     {
-        AnnounceFinishedUpdate();
+        ReadFinishedUpdate();
         if (!_options.Enabled)
         {
             return;
@@ -226,17 +223,11 @@ internal sealed class UpdateService : IDisposable
 
     private void OnReady()
     {
+        // Otherwise it waits in Settings → General, without a pop-up.
         if (IsInstalledCopy() && _updateAutomatically())
         {
             _installTimer.Start();
             InstallIfQuiet();
-            return;
-        }
-
-        if (_announced != _readyVersion)
-        {
-            _announced = _readyVersion;
-            _notify($"Version {_readyVersion?.ToString(3)} is ready", "Open Settings → General to install it (the overlay restarts).");
         }
     }
 
@@ -255,10 +246,10 @@ internal sealed class UpdateService : IDisposable
     }
 
     /// <summary>
-    /// The copy that just started was put there by an update (or started again after a failed one): say so once in a
-    /// notice (no window opens) and tidy the downloads folder.
+    /// The copy that just started was put there by an update (or started again after a failed one): keep that for
+    /// Settings → General (no window or pop-up) and tidy the downloads folder.
     /// </summary>
-    private void AnnounceFinishedUpdate()
+    private void ReadFinishedUpdate()
     {
         var path = Path.Combine(AppPaths.UpdatesDir, UpdateMarker.FileName);
         try
@@ -273,13 +264,10 @@ internal sealed class UpdateService : IDisposable
                         _updatedFrom = marker.From;
                         _updatedAt = DateTime.Now;
                         _logger.LogInformation("Updates: updated from {From} to {Version}", marker.From, AppInfo.Version);
-                        _notify($"Updated to version {AppInfo.Version}", $"{AppInfo.Name} updated itself from version {marker.From}.");
                         break;
                     case UpdateOutcome.Failed:
                         _failedTo = marker.To;
                         _logger.LogWarning("Updates: version {To} wasn't installed; this is still {Version}", marker.To, AppInfo.Version);
-                        _notify($"Version {marker.To} couldn't be installed",
-                            $"{AppInfo.Name} is still on version {AppInfo.Version}. It tries again the next time it starts.");
                         break;
                 }
             }
