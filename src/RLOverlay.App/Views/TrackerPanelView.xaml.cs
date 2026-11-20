@@ -17,7 +17,8 @@ namespace RLOverlay.App.Views;
 /// <summary>
 /// The overlay screen: every player in the lobby, by team, with their row from tracker.gg for the selected playlist
 /// (Ctrl+G switches it) and the stats picked in the settings next to it. Each row is the player's real tracker.gg page,
-/// loaded in an embedded browser when they join and cropped; the app never reads the numbers.
+/// loaded in an embedded browser when they join and cropped; the app never reads the numbers. The favourites screen
+/// (Ctrl+F) is a second one of these, showing a page of saved players instead (see <see cref="PanelViewModel.IsFavourites"/>).
 /// </summary>
 public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
 {
@@ -34,23 +35,35 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     private readonly TeamBlock _blue;
     private readonly TeamBlock _orange;
     private readonly TeamBlock _other;
+    private readonly TeamBlock _favourites;
     private readonly Action<string> _openProfile;
     private readonly ILogger _logger;
+    private readonly IFavouriteMarks? _marks;
     private PanelViewModel? _vm;
     private double _zoom = 1;
     private int _matchNumber = -1;
     private bool _disposed;
 
-    internal TrackerPanelView(Action<string> openProfile, ILogger logger)
+    internal TrackerPanelView(Action<string> openProfile, ILogger logger, IFavouriteMarks? marks = null)
     {
         InitializeComponent();
         _openProfile = openProfile;
         _logger = logger;
+        _marks = marks;
         _blue = new TeamBlock(this, "BLUE", "AccentBlue");
         _orange = new TeamBlock(this, "ORANGE", "AccentOrange");
         _other = new TeamBlock(this, "JOINING", "TextMuted");
+        _favourites = new TeamBlock(this, "FAVOURITES", "FavouriteGold");
+        if (marks is not null)
+        {
+            marks.Changed += OnFavouritesChanged;
+        }
+
         DataContextChanged += OnDataContextChanged;
     }
+
+    /// <summary>A shortcut hint in the header was pressed: do what that shortcut does.</summary>
+    public event Action<OverlayHotkey>? HintClicked;
 
     /// <summary>The browser profile all rows share (cookies, cache), created on first use.</summary>
     private static Task<CoreWebView2Environment> Environment()
@@ -94,7 +107,8 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     public void PlayReveal()
     {
         var delay = TimeSpan.FromMilliseconds(40);
-        foreach (var section in new FrameworkElement[] { HeaderRow, RowsHost, FooterRow })
+        var footer = _vm?.IsFavourites == true ? FavouritesFooter : FooterRow;
+        foreach (var section in new FrameworkElement[] { HeaderRow, RowsHost, footer })
         {
             Rise(section, delay, fromY: 8, fromOpacity: 0);
             delay += Stagger;
@@ -144,7 +158,21 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
         {
             _vm.PropertyChanged += OnViewModelPropertyChanged;
             _vm.RosterRefreshed += Rebuild;
+            FooterRow.Visibility = _vm.IsFavourites ? Visibility.Collapsed : Visibility.Visible;
+            FavouritesFooter.Visibility = _vm.IsFavourites ? Visibility.Visible : Visibility.Collapsed;
+            ShowPageSize();
             Rebuild();
+        }
+    }
+
+    /// <summary>The chosen page size stands out (gold edge, bright number).</summary>
+    private void ShowPageSize()
+    {
+        foreach (var button in new[] { PerPage5, PerPage10, PerPage20 })
+        {
+            var chosen = _vm is not null && button.Tag is string tag && tag == _vm.PerPage.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            button.BorderBrush = (Brush)FindResource(chosen ? "FavouriteGold" : "KeyCapBorder");
+            button.Foreground = (Brush)FindResource(chosen ? "TextPrimary" : "TextSecondary");
         }
     }
 
@@ -173,6 +201,36 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
                 }
 
                 break;
+
+            case nameof(PanelViewModel.PerPage):
+                ShowPageSize();
+                break;
+        }
+    }
+
+    private void OnFavouritesChanged()
+    {
+        foreach (var row in _rows.Values)
+        {
+            row.RefreshStar();
+        }
+    }
+
+    private void OnCycleHintClick(object sender, RoutedEventArgs e) => HintClicked?.Invoke(OverlayHotkey.CyclePlaylist);
+
+    private void OnFavouritesHintClick(object sender, RoutedEventArgs e) => HintClicked?.Invoke(OverlayHotkey.Favourites);
+
+    private void OnToggleHintClick(object sender, RoutedEventArgs e) => HintClicked?.Invoke(OverlayHotkey.TogglePanel);
+
+    private void OnPreviousPageClick(object sender, RoutedEventArgs e) => _vm?.PreviousPage();
+
+    private void OnNextPageClick(object sender, RoutedEventArgs e) => _vm?.NextPage();
+
+    private void OnPerPageClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag } && int.TryParse(tag, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var perPage))
+        {
+            _vm?.ChoosePerPage(perPage);
         }
     }
 
@@ -214,7 +272,7 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
             }
             else
             {
-                row = new TrackerRowView(player, _vm.RowLabel, _vm.CropOptions, _zoom, _vm.IsSample, TunedEnvironment, _openProfile, _logger);
+                row = new TrackerRowView(player, _vm.RowLabel, _vm.CropOptions, _zoom, _vm.IsSample, TunedEnvironment, _openProfile, _logger, _marks);
                 row.Changed += OnRowChanged;
                 _rows[player.Key] = row;
                 _sampleRows[player.Key] = _vm.IsSample;
@@ -239,13 +297,18 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
         }
     }
 
-    /// <summary>Blue, then Orange, then players whose team isn't known yet; a block only for teams with players.</summary>
+    /// <summary>
+    /// Blue, then Orange, then players whose team isn't known yet; a block only for teams with players. The favourites
+    /// screen has one block, the page of saved players.
+    /// </summary>
     private void Layout(IReadOnlyList<LobbyPlayer> players)
     {
         var heights = new List<GridLength>();
-        var blue = players.Where(p => p.TeamNum == 0).ToList();
-        var orange = players.Where(p => p.TeamNum == 1).ToList();
-        var other = players.Where(p => p.TeamNum is not (0 or 1)).ToList();
+        var favourites = _vm!.IsFavourites;
+        var saved = favourites ? players.ToList() : [];
+        var blue = favourites ? [] : players.Where(p => p.TeamNum == 0).ToList();
+        var orange = favourites ? [] : players.Where(p => p.TeamNum == 1).ToList();
+        var other = favourites ? [] : players.Where(p => p.TeamNum is not (0 or 1)).ToList();
         var blueIn = blue.Count(p => !p.HasLeft);
         var orangeIn = orange.Count(p => !p.HasLeft);
         var teamSize = _vm!.TeamSize(blueIn, orangeIn);
@@ -279,6 +342,7 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
         Group(_blue, blue, phaseKnown ? TeamCount(blueIn, blue.Count - blueIn, teamSize) : "");
         Group(_orange, orange, phaseKnown ? TeamCount(orangeIn, orange.Count - orangeIn, teamSize) : "");
         Group(_other, other, "");
+        Group(_favourites, saved, _vm.CountText);
 
         while (RowsHost.RowDefinitions.Count < heights.Count)
         {
@@ -368,6 +432,11 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
         }
 
         _disposed = true;
+        if (_marks is not null)
+        {
+            _marks.Changed -= OnFavouritesChanged;
+        }
+
         foreach (var row in _rows.Values)
         {
             row.Dispose();

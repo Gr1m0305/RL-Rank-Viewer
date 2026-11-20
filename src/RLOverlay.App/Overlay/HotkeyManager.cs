@@ -11,6 +11,7 @@ public enum OverlayHotkey
 {
     TogglePanel = 0xB001,
     CyclePlaylist = 0xB002,
+    Favourites = 0xB003,
 }
 
 /// <summary>
@@ -39,12 +40,13 @@ internal sealed class HotkeyManager : IDisposable
     /// <summary>Bindings that could not be registered (taken by another app or invalid), for the settings UI.</summary>
     public IReadOnlyList<string> Failures { get; private set; } = [];
 
-    public void SetBindings(HotkeyGesture toggle, HotkeyGesture cycle)
+    public void SetBindings(HotkeyGesture toggle, HotkeyGesture cycle, HotkeyGesture favourites)
     {
         var wasActive = _active;
         SetActive(false);
         _bindings[OverlayHotkey.TogglePanel] = toggle;
         _bindings[OverlayHotkey.CyclePlaylist] = cycle;
+        _bindings[OverlayHotkey.Favourites] = favourites;
         SetActive(wasActive);
     }
 

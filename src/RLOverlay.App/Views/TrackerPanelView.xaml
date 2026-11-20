@@ -10,6 +10,68 @@
              FontFamily="{StaticResource UiFont}"
              Foreground="{StaticResource TextPrimary}"
              Focusable="False">
+    <UserControl.Resources>
+        <!-- A shortcut hint in the header (key caps and what it does): pressing it does the same as the shortcut. It
+             lights up only when the cursor is on it, not on the rest of the header. -->
+        <Style x:Key="HintButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="ov:OverlayHit.IsInteractive" Value="True" />
+            <Setter Property="ov:OverlayHit.IsHovered" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="5" Padding="4,2,6,2" Background="Transparent">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="ov:OverlayHit.IsHovered" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource KeyCapBackground}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="HintLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="1,0,0,0" />
+        </Style>
+
+        <!-- The favourites screen's page buttons and page sizes. -->
+        <Style x:Key="PageButton" TargetType="Button">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="ov:OverlayHit.IsInteractive" Value="True" />
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{StaticResource KeyCapBorder}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="MinWidth" Value="24" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="5" Padding="6,1,6,2" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="ov:OverlayHit.IsHovered" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{StaticResource KeyCapBackground}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.35" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
     <Grid>
         <!-- Soft shadow on its own layer so text is not rendered through an effect. -->
         <Border CornerRadius="12" Background="#FF0A0C10" Margin="3">
@@ -23,8 +85,8 @@
                 BorderThickness="1"
                 Padding="14,11,14,10">
             <StackPanel MinWidth="560">
-                <!-- Header: app badge, playlist title, subtitle; hotkey hints and the move grip on the right. Dragging the
-                     header moves the screen. -->
+                <!-- Header: app badge, playlist title (or a star and "Favourites"), subtitle; shortcut hints and the move
+                     grip on the right. Dragging the header moves the screen. -->
                 <DockPanel x:Name="HeaderRow" Margin="1,0,0,9" Background="Transparent" Cursor="SizeAll"
                            ov:OverlayHit.IsInteractive="True" ov:OverlayHit.Drag="Move">
                     <Path DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center">
@@ -49,25 +111,34 @@
                             </Style>
                         </Path.Style>
                     </Path>
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                        <ItemsControl ItemsSource="{Binding CycleKeys}"
-                                      ItemTemplate="{StaticResource KeyCapTemplate}"
-                                      ItemsPanel="{StaticResource HorizontalPanel}"
-                                      Focusable="False" />
-                        <TextBlock Text="Playlist" FontSize="11" Foreground="{StaticResource TextSecondary}"
-                                   VerticalAlignment="Center" Margin="1,0,10,0" />
-                        <ItemsControl ItemsSource="{Binding ToggleKeys}"
-                                      ItemTemplate="{StaticResource KeyCapTemplate}"
-                                      ItemsPanel="{StaticResource HorizontalPanel}"
-                                      Focusable="False" />
-                        <TextBlock Text="Hide" FontSize="11" Foreground="{StaticResource TextSecondary}"
-                                   VerticalAlignment="Center" Margin="1,0,0,0" />
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                        <Button Style="{StaticResource HintButton}" Click="OnCycleHintClick" AutomationProperties.Name="Next playlist">
+                            <StackPanel Orientation="Horizontal">
+                                <ItemsControl ItemsSource="{Binding CycleKeys}" ItemTemplate="{StaticResource KeyCapTemplate}"
+                                              ItemsPanel="{StaticResource HorizontalPanel}" Focusable="False" />
+                                <TextBlock Text="Playlist" Style="{StaticResource HintLabel}" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource HintButton}" Click="OnFavouritesHintClick" AutomationProperties.Name="{Binding FavouritesHint}">
+                            <StackPanel Orientation="Horizontal">
+                                <ItemsControl ItemsSource="{Binding FavouritesKeys}" ItemTemplate="{StaticResource KeyCapTemplate}"
+                                              ItemsPanel="{StaticResource HorizontalPanel}" Focusable="False" />
+                                <TextBlock Text="{Binding FavouritesHint}" Style="{StaticResource HintLabel}" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource HintButton}" Click="OnToggleHintClick" AutomationProperties.Name="{Binding ToggleHint}">
+                            <StackPanel Orientation="Horizontal">
+                                <ItemsControl ItemsSource="{Binding ToggleKeys}" ItemTemplate="{StaticResource KeyCapTemplate}"
+                                              ItemsPanel="{StaticResource HorizontalPanel}" Focusable="False" />
+                                <TextBlock Text="{Binding ToggleHint}" Style="{StaticResource HintLabel}" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                     <!-- Loads every player's tracker.gg page again. A press on it is a click, not the start of a drag. -->
                     <Button x:Name="RefreshButton" DockPanel.Dock="Right" Margin="16,0,0,0" VerticalAlignment="Center"
                             Focusable="False" Cursor="Hand" IsEnabled="False"
-                            ToolTip="Load every player's tracker.gg page again"
-                            ov:OverlayHit.IsInteractive="True" Click="OnRefreshClick">
+                            ToolTip="Load every player's tracker.gg page again" AutomationProperties.Name="Refresh"
+                            ov:OverlayHit.IsInteractive="True" ov:OverlayHit.IsHovered="False" Click="OnRefreshClick">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="Chrome" CornerRadius="5" Padding="7,2,8,3" Background="Transparent"
@@ -94,6 +165,9 @@
                         <TextBlock Text="R" FontSize="12" FontWeight="Bold" Foreground="White"
                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
+                    <Path Data="{StaticResource StarGeometry}" Fill="{StaticResource FavouriteGold}" Width="14" Height="14"
+                          Stretch="Uniform" Margin="10,0,-3,0" VerticalAlignment="Center"
+                          Visibility="{Binding IsFavourites, Converter={StaticResource BoolToVisibility}}" />
                     <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
                                Margin="10,0,0,0" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Subtitle}" FontSize="12.5" Foreground="{StaticResource TextSecondary}"
@@ -111,6 +185,31 @@
                              Fill="{StaticResource WaitingYellow}"
                              Visibility="{Binding IsWaiting, Converter={StaticResource BoolToVisibility}}" />
                     <TextBlock Text="{Binding FooterLeft}" FontSize="11" Foreground="{StaticResource TextMuted}"
+                               TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+
+                <!-- Favourites screen: page buttons on the left, the page size on the right. -->
+                <DockPanel x:Name="FavouritesFooter" Margin="1,8,1,0" Visibility="Collapsed">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0"
+                                Visibility="{Binding HasFavourites, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Per page" FontSize="11" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="0,0,2,0" />
+                        <Button x:Name="PerPage5" Style="{StaticResource PageButton}" Content="5" Tag="5" Click="OnPerPageClick"
+                                AutomationProperties.Name="5 per page" />
+                        <Button x:Name="PerPage10" Style="{StaticResource PageButton}" Content="10" Tag="10" Click="OnPerPageClick"
+                                AutomationProperties.Name="10 per page" />
+                        <Button x:Name="PerPage20" Style="{StaticResource PageButton}" Content="20" Tag="20" Click="OnPerPageClick"
+                                AutomationProperties.Name="20 per page" />
+                    </StackPanel>
+                    <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0"
+                                Visibility="{Binding HasFavourites, Converter={StaticResource BoolToVisibility}}">
+                        <Button Style="{StaticResource PageButton}" Content="‹" Margin="0" Click="OnPreviousPageClick"
+                                IsEnabled="{Binding CanGoBack}" AutomationProperties.Name="Previous page" />
+                        <TextBlock Text="{Binding PageText}" FontSize="11" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"
+                                   Margin="8,0,4,0" Typography.NumeralAlignment="Tabular" />
+                        <Button Style="{StaticResource PageButton}" Content="›" Click="OnNextPageClick"
+                                IsEnabled="{Binding CanGoForward}" AutomationProperties.Name="Next page" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding FooterLeft}" FontSize="11" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" />
                 </DockPanel>
             </StackPanel>

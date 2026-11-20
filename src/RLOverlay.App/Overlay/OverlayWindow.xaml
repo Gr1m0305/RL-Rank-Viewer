@@ -55,6 +55,8 @@
         <StackPanel>
             <Grid x:Name="PanelArea">
                 <ContentPresenter x:Name="PanelHost" />
+                <!-- The favourites screen (Ctrl+F) takes the lobby's place while it is open. -->
+                <ContentPresenter x:Name="FavouritesHost" Visibility="Collapsed" />
                 <!-- Resize from any corner; the opposite corner stays put. The header (in the panel) moves it. -->
                 <Border Style="{StaticResource CornerGrip}" local:OverlayHit.Drag="TopLeft" Cursor="SizeNWSE"
                         HorizontalAlignment="Left" VerticalAlignment="Top">

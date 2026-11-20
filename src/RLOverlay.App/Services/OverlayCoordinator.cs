@@ -10,8 +10,8 @@ using RLOverlay.Core.StatsApi;
 namespace RLOverlay.App.Services;
 
 /// <summary>
-/// The glue between the lobby state machine, the screen's view model and the overlay window. Runs on the UI thread
-/// only: Stats API messages are marshalled here by the caller.
+/// The glue between the lobby state machine, the screens' view models (the lobby and the favourites) and the overlay
+/// window. Runs on the UI thread only: Stats API messages are marshalled here by the caller.
 /// </summary>
 internal sealed class OverlayCoordinator : IDisposable
 {
@@ -21,31 +21,48 @@ internal sealed class OverlayCoordinator : IDisposable
     private static readonly TimeSpan HoldWhileHiding = TimeSpan.FromMilliseconds(450);
 
     private readonly PanelViewModel _vm;
+    private readonly PanelViewModel _favourites;
     private readonly OverlayWindow _window;
     private readonly ILogger _logger;
     private readonly DispatcherTimer _stripTimer;
     private readonly DispatcherTimer _holdTimer;
+    private readonly DispatcherTimer _favouritesTimer;
     private LobbyStateMachine _lobby;
     private OverlaySettings _settings;
+    private MatchPhase _phaseSeen = MatchPhase.Idle;
     private bool _userCycled;
 
     public OverlayCoordinator(
         OverlaySettings settings,
         PanelViewModel vm,
+        PanelViewModel favourites,
         OverlayWindow window,
         ILogger<OverlayCoordinator> logger)
     {
         _settings = settings;
         _lobby = new LobbyStateMachine { KeepOpenAtKickoff = settings.KeepOpenAtKickoff };
         _vm = vm;
+        _favourites = favourites;
         _window = window;
         _logger = logger;
         _stripTimer = new DispatcherTimer { Interval = StripDuration };
         _stripTimer.Tick += (_, _) => HideStrip();
         _holdTimer = new DispatcherTimer { Interval = HoldWhileHiding };
         _holdTimer.Tick += (_, _) => FollowLobbyWhileHidden();
+        _favouritesTimer = new DispatcherTimer { Interval = HoldWhileHiding };
+        _favouritesTimer.Tick += (_, _) => ClearFavouritesWhenHidden();
         _vm.ApplySettings(settings);
+        _favourites.ApplySettings(settings);
+        _vm.PropertyChanged += (_, e) =>
+        {
+            // The favourites show the same playlist as the lobby (Ctrl+G switches both).
+            if (e.PropertyName == nameof(PanelViewModel.Playlist))
+            {
+                _favourites.Playlist = _vm.Playlist;
+            }
+        };
         _vm.Playlist = ResolveInitialPlaylist();
+        _favourites.Playlist = _vm.Playlist;
     }
 
     public LobbyStateMachine Lobby => _lobby;
@@ -54,6 +71,12 @@ internal sealed class OverlayCoordinator : IDisposable
 
     /// <summary>Raised after the roster may have changed (players joined, left or changed team; lobby cleared).</summary>
     public event Action? LobbyChanged;
+
+    /// <summary>A player joined the real lobby or changed (so a favourite's saved name can follow a new one).</summary>
+    public event Action<LobbyPlayer>? PlayerSeen;
+
+    /// <summary>True while the favourites screen is open.</summary>
+    public bool FavouritesOpen => _window.FavouritesOn;
 
     public void Handle(StatsMessage message) => ApplyEffects(_lobby.Apply(message));
 
@@ -66,15 +89,78 @@ internal sealed class OverlayCoordinator : IDisposable
         }
     }
 
-    /// <summary>Ctrl+R.</summary>
-    public void TogglePanel() => ApplyEffects(_lobby.TogglePanel());
+    /// <summary>Ctrl+R. On the favourites screen it goes back to the lobby (and shows it if it was hidden).</summary>
+    public void TogglePanel()
+    {
+        if (_window.FavouritesOn)
+        {
+            if (!_window.PanelOn)
+            {
+                ApplyEffects(_lobby.TogglePanel());
+            }
+
+            CloseFavourites("back to the lobby");
+            return;
+        }
+
+        ApplyEffects(_lobby.TogglePanel());
+    }
+
+    /// <summary>Ctrl+F: opens the favourites screen on its first page, or closes it.</summary>
+    public void ToggleFavourites()
+    {
+        if (_window.FavouritesOn)
+        {
+            CloseFavourites("shortcut");
+        }
+        else
+        {
+            OpenFavourites();
+        }
+    }
+
+    private void OpenFavourites()
+    {
+        _favouritesTimer.Stop();
+        _favourites.Playlist = _vm.Playlist;
+        _favourites.IsSample = SampleLobby;
+        _favourites.ShowFavourites();
+        _window.SetFavouritesVisible(true);
+        _logger.LogInformation("Favourites opened ({Count} saved, {PerPage} per page)", _favourites.FavouriteCount, _favourites.PerPage);
+    }
+
+    /// <summary>
+    /// Closes the favourites screen: the lobby takes its place if it is showing, else the overlay fades out. Once out of
+    /// sight its rows go, so their pages are closed.
+    /// </summary>
+    public void CloseFavourites(string reason)
+    {
+        if (!_window.FavouritesOn)
+        {
+            return;
+        }
+
+        _window.SetFavouritesVisible(false);
+        _favouritesTimer.Stop();
+        _favouritesTimer.Start();
+        _logger.LogInformation("Favourites closed ({Reason})", reason);
+    }
+
+    private void ClearFavouritesWhenHidden()
+    {
+        _favouritesTimer.Stop();
+        if (!_window.FavouritesOn)
+        {
+            _favourites.ClearFavourites();
+        }
+    }
 
     /// <summary>Ctrl+G: next enabled playlist, every row moves its crop to it, the strip shows for 1.5 s.</summary>
     public void CyclePlaylist()
     {
         var next = PlaylistCycler.Next(_vm.Playlist, _settings.EnabledPlaylists);
         _userCycled = true;
-        _vm.Playlist = next;
+        _vm.Playlist = next; // the favourites follow (see the constructor)
         _vm.ShowSwitchedNote = true;
         _window.SetStripVisible(true);
         _stripTimer.Stop();
@@ -87,6 +173,7 @@ internal sealed class OverlayCoordinator : IDisposable
         _settings = settings;
         _lobby.KeepOpenAtKickoff = settings.KeepOpenAtKickoff;
         _vm.ApplySettings(settings);
+        _favourites.ApplySettings(settings);
         if (!settings.EnabledPlaylists.Contains(_vm.Playlist))
         {
             _vm.Playlist = ResolveInitialPlaylist();
@@ -119,7 +206,9 @@ internal sealed class OverlayCoordinator : IDisposable
     public void Reset()
     {
         HideStrip();
+        CloseFavourites("preview");
         _lobby = new LobbyStateMachine { KeepOpenAtKickoff = _settings.KeepOpenAtKickoff };
+        _phaseSeen = MatchPhase.Idle;
         _userCycled = false;
         _vm.Phase = MatchPhase.Idle;
         _vm.Clear();
@@ -171,6 +260,7 @@ internal sealed class OverlayCoordinator : IDisposable
     {
         if (effects.Count == 0)
         {
+            CloseFavouritesAtKickoff();
             return;
         }
 
@@ -197,10 +287,12 @@ internal sealed class OverlayCoordinator : IDisposable
 
                 case PlayerAddedEffect added:
                     _vm.AddOrUpdate(added.Player);
+                    Seen(added.Player);
                     break;
 
                 case PlayerChangedEffect changed:
                     _vm.AddOrUpdate(changed.After);
+                    Seen(changed.After);
                     break;
 
                 case PlayerRemovedEffect removed:
@@ -213,6 +305,11 @@ internal sealed class OverlayCoordinator : IDisposable
                     if (!visibility.Visible && visibility.Reason == PanelChangeReason.Kickoff)
                     {
                         HideStrip();
+                    }
+
+                    if (visibility.Visible && visibility.Reason == PanelChangeReason.MatchStarted)
+                    {
+                        CloseFavourites("a new lobby"); // the new lobby is what the user wants to see
                     }
 
                     break;
@@ -234,6 +331,28 @@ internal sealed class OverlayCoordinator : IDisposable
         _vm.Phase = _lobby.Phase;
         _vm.Refresh();
         LobbyChanged?.Invoke();
+        CloseFavouritesAtKickoff();
+    }
+
+    /// <summary>
+    /// At kickoff the favourites screen closes, like the lobby does (opened during the match, it stays until closed).
+    /// </summary>
+    private void CloseFavouritesAtKickoff()
+    {
+        var kickoff = _lobby.Phase == MatchPhase.Live && _phaseSeen != MatchPhase.Live;
+        _phaseSeen = _lobby.Phase;
+        if (kickoff)
+        {
+            CloseFavourites("kickoff");
+        }
+    }
+
+    private void Seen(LobbyPlayer player)
+    {
+        if (!IsPreviewing)
+        {
+            PlayerSeen?.Invoke(player);
+        }
     }
 
     private Playlist ResolveInitialPlaylist() =>
@@ -253,5 +372,6 @@ internal sealed class OverlayCoordinator : IDisposable
     {
         _stripTimer.Stop();
         _holdTimer.Stop();
+        _favouritesTimer.Stop();
     }
 }

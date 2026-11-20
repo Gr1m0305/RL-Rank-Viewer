@@ -8,8 +8,10 @@ Blue and Orange each get their own block, and the columns line up from player to
 the panel and drag a corner to resize it. The panel fades out at kickoff (or stays up, if you prefer), and clicking a
 name opens that player's full tracker.gg profile. After the match the whole lobby stays available (`Ctrl+R`) so you can look up who you just
 played, through freeplay and the menus, until you load into a new game with other players or close the game.
-Players who quit early stay on the board too, marked *left the match*. The app waits quietly in the tray, switches
-on by itself when Rocket League starts and keeps itself up to date from GitHub. No account or API key is needed.
+Players who quit early stay on the board too, marked *left the match*. Click the star next to a name to save that
+player as a favourite; `Ctrl+F` shows everyone you saved, a page at a time. The app waits quietly in the tray,
+switches on by itself when Rocket League starts and keeps itself up to date from GitHub. No account or API key is
+needed.
 
 ![The lobby screen (preview with made-up players)](docs/screenshots/01_screen_layout.png)
 
@@ -20,12 +22,15 @@ tracker.gg page. The repository holds no screenshots of tracker.gg pages because
 |---|---|
 | `Ctrl+R` | Show / hide the lobby (works during the match too, where the next kickoff hides it again unless it is kept open, and after the match) |
 | `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Heatseeker, Tournaments, Casual. Every row moves at once, without reloading |
+| `Ctrl+F` | Open / close your favourites (see [Favourites](#favourites)) |
 | Click a name | Opens that player's tracker.gg profile in your browser |
+| Click the star by a name | Saves that player as a favourite (gold star); click again to remove them |
 | Drag the header | Moves the panel anywhere on its screen (the dotted grip on the right shows where to grab) |
 | *Refresh* (header) | Loads every player's tracker.gg page again, for example when ranks moved since the pages loaded |
 | Drag a corner | Resizes the panel, from 75 % to 150 % (blue brackets show the corners when the pointer is over them) |
 
-The shortcuts can be changed in Settings and only work while Rocket League is the window in front.
+The shortcuts can be changed in Settings and only work while Rocket League is the window in front. The shortcut
+hints in the panel's header can be clicked too.
 
 ## How it stays safe with Easy Anti-Cheat
 
@@ -164,6 +169,25 @@ Stats API on.
   everyone you just played with and click their names. Freeplay and training don't replace it. It is replaced once
   you load into a new game with at least one other player, and cleared when you close the game.
 
+## Favourites
+
+Click the star next to a player's name to keep them: it turns gold and the player is saved straight away
+(`favourites.json`, see [Files](#files)). Click it again to take them off. Bots and split-screen guests have no star,
+since tracker.gg has no profile for them.
+
+`Ctrl+F` (or clicking *Favourites* in the header) opens the favourites screen in place of the lobby: every saved
+player's tracker.gg row for the selected playlist, newest first, **5 per page**. Use **‹ ›** at the bottom to turn the
+pages and **5 / 10 / 20** to show more at once; the choice is kept, and is also in Settings → *Favourites*. 20 per
+page makes a tall screen, so you may want to shrink it a little by dragging a corner. `Ctrl+G` switches the playlist
+here too, a star clicked off stays on the page until you turn it (so a slip can be undone), and clicking a name opens
+the full profile. `Ctrl+F` again closes it and the lobby comes back; `Ctrl+R` goes straight to the lobby. The
+favourites also close at kickoff and when a new lobby loads.
+
+A saved player who turns up under a new name keeps the new one, so their row keeps working (tracker.gg finds every
+platform but Steam by name).
+
+![The favourites screen (made-up players)](docs/screenshots/12_favourites.png)
+
 **Standby:** while Rocket League is closed the app does nothing but wait (tray tooltip: *standby*). When the game
 starts it switches on and shows a short notice (turn that off in Settings → *General*); when the game closes it goes
 back to standby and closes the pages.
@@ -175,7 +199,8 @@ double-click opens Settings. Starting the exe again while it runs also opens Set
 
 The settings window covers the game connection (Stats API status per ini file, *Enable Stats API…*, the port), the
 **stats next to each rank** (Wins, Streak, Peak MMR, All-time peak, Goals, Shots, Assists, Saves, MVPs), which
-playlists `Ctrl+G` cycles through and the default, the two shortcuts (click a field and press the new combination),
+playlists `Ctrl+G` cycles through and the default, the three shortcuts (click a field and press the new combination),
+favourites per page,
 size (75 % to 150 %, with *Reset to top right* to put the panel back in its corner), *Start with Windows* and
 *Update automatically*.
 **Preview** shows the lobby screen with made-up players while you adjust it, and you can drag it around and resize
@@ -242,6 +267,7 @@ dotnet build RLOverlay.sln
 | Path | Contents |
 |---|---|
 | `%LOCALAPPDATA%\RLOverlay\settings.json` | settings |
+| `%LOCALAPPDATA%\RLOverlay\favourites.json` | your favourites (platform, account id, last name seen, when added) |
 | `%LOCALAPPDATA%\RLOverlay\logs\` | daily logs, 7 kept |
 | `%LOCALAPPDATA%\RLOverlay\webview\` | the built-in browser's data (tracker.gg cookies and cache) |
 | `%LOCALAPPDATA%\RLOverlay\updates\` | a downloaded update's setup file, until it is installed |

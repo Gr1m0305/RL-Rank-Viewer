@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 using RLOverlay.App.Overlay;
+using RLOverlay.App.Services;
 using RLOverlay.Core;
 using RLOverlay.Core.Lobby;
 using RLOverlay.Core.Players;
@@ -46,9 +47,10 @@ internal enum TrackerRowState
 }
 
 /// <summary>
-/// One player on the overlay screen: the name (click for the full profile in the browser) and a band with the
-/// player's tracker.gg page, cropped to the selected playlist's row plus the stat tiles picked in the settings. The
-/// page is loaded once, like a normal browser tab, and stays loaded; switching playlist or stats only moves the crop.
+/// One player on the overlay screen: a star (click to save them as a favourite), the name (click for the full profile
+/// in the browser) and a band with the player's tracker.gg page, cropped to the selected playlist's row plus the stat
+/// tiles picked in the settings. The page is loaded once, like a normal browser tab, and stays loaded; switching
+/// playlist or stats only moves the crop.
 /// </summary>
 /// <remarks>
 /// Sizes here are in the panel's own units; the overlay window scales the whole panel by the user's size setting.
@@ -68,9 +70,10 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
     private const double LoadingHeight = 720;
 
-    /// <summary>Width of the platform mark, name and status line in front of the band.</summary>
-    private const double InfoWidth = 214;
+    /// <summary>Width of the star, platform mark, name and status line in front of the band.</summary>
+    private const double InfoWidth = 236;
     private const double IconSize = 15;
+    private const double StarSize = 15;
     private const double PlaceholderWidth = 640;
     private const double RowHeight = 51;
     private const double TileRowHeight = 69;
@@ -84,9 +87,15 @@ internal sealed class TrackerRowView : Grid, IDisposable
     /// <summary>A page still loading after this long lets the next one start too (it keeps loading).</summary>
     private static readonly TimeSpan TurnTimeout = TimeSpan.FromSeconds(8);
     private static readonly Color DefaultBand = Color.FromRgb(0, 21, 56);
+    private static readonly Brush StarHoverFill = Frozen(Color.FromArgb(0x40, 0xFF, 0xC9, 0x3C));
 
     private readonly Func<Task<CoreWebView2Environment>> _environment;
     private readonly Action<string> _openProfile;
+    private readonly IFavouriteMarks? _marks;
+    private readonly Button _star;
+    private readonly System.Windows.Shapes.Path _starShape;
+    private readonly bool _canMark;
+    private bool _isFavourite;
     private readonly ILogger _logger;
     private readonly string? _url;
     private readonly bool _sample;
@@ -138,9 +147,11 @@ internal sealed class TrackerRowView : Grid, IDisposable
         bool sample,
         Func<Task<CoreWebView2Environment>> environment,
         Action<string> openProfile,
-        ILogger logger)
+        ILogger logger,
+        IFavouriteMarks? marks = null)
     {
         Player = player;
+        _marks = marks;
         _label = label;
         _options = options;
         _zoom = zoom;
@@ -154,12 +165,50 @@ internal sealed class TrackerRowView : Grid, IDisposable
         ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(InfoWidth) });
         ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        // Platform mark, name (+ BOT for bots), then a status line. Pages are loaded again with the header's Refresh.
+        // Star, platform mark, name (+ BOT for bots), then a status line. Pages are loaded again with the header's Refresh.
         var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
         Children.Add(info);
 
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
         info.Children.Add(nameLine);
+
+        // The star saves the player as a favourite (or removes them). Bots and split-screen guests have none, but every
+        // row keeps its space so the names start in one line. The Preview's made-up players show it without a click.
+        _starShape = new System.Windows.Shapes.Path
+        {
+            Data = (Geometry)Application.Current.FindResource("StarGeometry"),
+            Width = StarSize,
+            Height = StarSize,
+            Stretch = Stretch.Uniform,
+            StrokeThickness = 1.4,
+            StrokeLineJoin = PenLineJoin.Round,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        _star = new Button
+        {
+            Template = (ControlTemplate)Application.Current.FindResource("BareButton"),
+            Content = _starShape,
+            Padding = new Thickness(3),
+            Margin = new Thickness(-3, 0, 3, 0),
+            Focusable = false,
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = FavouriteList.CanSave(player.Id) ? Visibility.Visible : Visibility.Hidden,
+        };
+        _canMark = marks?.CanMark(player, sample) == true;
+        if (_canMark)
+        {
+            OverlayHit.SetIsInteractive(_star, true);
+            _star.Cursor = System.Windows.Input.Cursors.Hand;
+            _star.Click += OnStarClicked;
+            DependencyPropertyDescriptor.FromProperty(OverlayHit.IsHoveredProperty, typeof(Button)).AddValueChanged(_star, OnStarHover);
+        }
+        else
+        {
+            _star.IsHitTestVisible = false;
+            _star.IsEnabled = false;
+        }
+
+        nameLine.Children.Add(_star);
 
         // Every row keeps the mark's space (empty for bots), so the names start in one line.
         _platform = new System.Windows.Shapes.Path
@@ -346,6 +395,37 @@ internal sealed class TrackerRowView : Grid, IDisposable
         // Someone who quit stays on the board until the next game, faded and marked.
         Opacity = player.HasLeft ? 0.55 : 1;
         ShowNote();
+        RefreshStar();
+    }
+
+    /// <summary>Whether the star shows the player as a favourite (call after the favourites changed).</summary>
+    public bool IsFavourite => _isFavourite;
+
+    /// <summary>The favourites changed: fill or empty the star.</summary>
+    public void RefreshStar()
+    {
+        _isFavourite = _marks?.IsFavourite(Player.Id) == true;
+        var hovered = _canMark && OverlayHit.GetIsHovered(_star);
+        var gold = Brush("FavouriteGold");
+        _starShape.Fill = _isFavourite ? gold : hovered ? StarHoverFill : Brushes.Transparent;
+        _starShape.Stroke = _isFavourite || hovered ? gold : Brush("TextMuted");
+        AutomationProperties.SetName(_star, _isFavourite ? $"Remove {Player.Name} from favourites" : $"Add {Player.Name} to favourites");
+    }
+
+    private void OnStarClicked(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        _marks?.Toggle(Player);
+        RefreshStar();
+    }
+
+    private void OnStarHover(object? sender, EventArgs e) => RefreshStar();
+
+    private static Brush Frozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 
     /// <summary>The line under the name: "left the match" for a quitter, else what the band is doing.</summary>
@@ -973,6 +1053,12 @@ internal sealed class TrackerRowView : Grid, IDisposable
         if (_url is not null)
         {
             DependencyPropertyDescriptor.FromProperty(OverlayHit.IsHoveredProperty, typeof(Border)).RemoveValueChanged(_nameHit, OnNameHover);
+        }
+
+        if (_canMark)
+        {
+            _star.Click -= OnStarClicked;
+            DependencyPropertyDescriptor.FromProperty(OverlayHit.IsHoveredProperty, typeof(Button)).RemoveValueChanged(_star, OnStarHover);
         }
 
         if (_web is { } web)

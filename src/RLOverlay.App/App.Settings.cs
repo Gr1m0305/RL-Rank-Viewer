@@ -129,7 +129,9 @@ public partial class App : ISettingsHost
     private void ApplyLook(OverlaySettings settings)
     {
         _coordinator!.ApplySettings(settings);
-        _panelView!.SetZoom(Math.Clamp(settings.Scale, OverlaySettings.MinScale, OverlaySettings.MaxScale));
+        var zoom = Math.Clamp(settings.Scale, OverlaySettings.MinScale, OverlaySettings.MaxScale);
+        _panelView!.SetZoom(zoom);
+        _favouritesView?.SetZoom(zoom);
         _window!.Configure(ScreenFor(settings.Screen), settings.OffsetX, settings.OffsetY, settings.Scale);
     }
 
@@ -167,6 +169,7 @@ public partial class App : ISettingsHost
         _settings = settings.Normalize();
         _store!.Save(_settings);
         _panelView!.SetZoom(_settings.Scale);
+        _favouritesView?.SetZoom(_settings.Scale);
         _window!.Configure(ScreenFor(_settings.Screen), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
         editor?.PlacementSaved(_settings.OffsetX, _settings.OffsetY, _settings.Scale);
         _log.LogInformation("Screen moved to {X}, {Y} from the top-right corner at {Size:0} %", _settings.OffsetX, _settings.OffsetY, _settings.Scale * 100);

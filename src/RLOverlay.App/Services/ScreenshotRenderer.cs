@@ -17,8 +17,8 @@ namespace RLOverlay.App.Services;
 
 /// <summary>
 /// <c>--screenshots &lt;dir&gt;</c>: renders documentation images off-screen (no window on the desktop): the overlay
-/// screen with made-up players (placeholders where tracker.gg's rows go, so no tracker.gg page or rank artwork ends
-/// up in the repository), the settings window and setup.
+/// screen and the favourites screen with made-up players (placeholders where tracker.gg's rows go, so no tracker.gg page
+/// or rank artwork ends up in the repository), the settings window and setup.
 /// </summary>
 internal static class ScreenshotRenderer
 {
@@ -32,6 +32,19 @@ internal static class ScreenshotRenderer
         ("Homebody John", "XboxOne|2535412345678901|0", 1),
     ];
 
+    /// <summary>Made-up saved players for the favourites screen (8, so 5 per page makes two pages).</summary>
+    private static readonly (string Name, Platform Platform, string Uid)[] Saved =
+    [
+        ("Khimaira", Platform.Steam, "76561198012345678"),
+        ("Velvet Comet", Platform.Epic, "c1d2e3f4a5b60718293a4b5c6d7e8f90"),
+        ("Turbo Toast", Platform.PlayStation, "5839201746382910475"),
+        ("Pebblesmith", Platform.Xbox, "2535498765432109"),
+        ("Lumen Drift", Platform.Epic, "0a9b8c7d6e5f40312a3b4c5d6e7f8091"),
+        ("Okra Rocket", Platform.Switch, "6a5b4c3d2e1f0918"),
+        ("Mako Reef", Platform.Steam, "76561198087654321"),
+        ("Sunny Halftime", Platform.Epic, "f0e1d2c3b4a5968778695a4b3c2d1e0f"),
+    ];
+
     public static IReadOnlyList<string> RenderAll(string directory)
     {
         Directory.CreateDirectory(directory);
@@ -39,6 +52,9 @@ internal static class ScreenshotRenderer
 
         // 1. The overlay screen's layout (Preview look: made-up players, so placeholders instead of tracker.gg rows).
         written.Add(RenderToPng(Preview(), Path.Combine(directory, "01_screen_layout.png")));
+
+        // 12. The favourites screen (Ctrl+F), first of two pages.
+        written.Add(RenderToPng(FavouritesScreen(), Path.Combine(directory, "12_favourites.png")));
 
         // 8 and 9. The settings window (first screen, and the whole scrolling page), with a stand-in host.
         RenderSettings(directory, written);
@@ -60,11 +76,47 @@ internal static class ScreenshotRenderer
             vm.AddOrUpdate(new LobbyPlayer(LobbyPlayer.KeyFor(primaryId, name), name, PlatformId.Parse(primaryId, name), team));
         }
 
-        var panel = new TrackerPanelView(_ => { }, NullLogger.Instance) { DataContext = vm };
+        // One of them is a favourite already (the filled star).
+        var panel = new TrackerPanelView(_ => { }, NullLogger.Instance, new SampleMarks(["Khimaira"])) { DataContext = vm };
+        return OnBackdrop(panel);
+    }
+
+    private static FrameworkElement FavouritesScreen()
+    {
+        var since = new DateTime(2026, 11, 20, 12, 0, 0, DateTimeKind.Utc);
+        var players = Saved.Select((s, i) => new FavouritePlayer(s.Platform, s.Uid, s.Name, since.AddDays(-i))).ToList();
+        var vm = new PanelViewModel { IsFavourites = true, IsSample = true, FavouriteSource = () => players };
+        vm.ApplySettings(new OverlaySettings().Normalize());
+        vm.Playlist = Playlist.Doubles;
+        vm.ShowFavourites();
+        var panel = new TrackerPanelView(_ => { }, NullLogger.Instance, new SampleMarks(players.Select(p => p.Name).ToList())) { DataContext = vm };
+        return OnBackdrop(panel);
+    }
+
+    private static FrameworkElement OnBackdrop(FrameworkElement panel)
+    {
         var root = new Grid { Background = Backdrop() };
         root.Children.Add(new Border { Margin = new Thickness(44, 40, 44, 48), HorizontalAlignment = HorizontalAlignment.Center, Child = panel });
         TextOptions.SetTextFormattingMode(root, TextFormattingMode.Ideal);
         return root;
+    }
+
+    /// <summary>Stars for the pictures: the named players are favourites; clicking does nothing.</summary>
+    private sealed class SampleMarks(IReadOnlyCollection<string> favourites) : IFavouriteMarks
+    {
+        public event Action? Changed
+        {
+            add { }
+            remove { }
+        }
+
+        public bool IsFavourite(PlatformId id) => favourites.Contains(id.DisplayName);
+
+        public bool CanMark(LobbyPlayer player, bool sample) => FavouriteList.CanSave(player.Id);
+
+        public void Toggle(LobbyPlayer player)
+        {
+        }
     }
 
     /// <summary>A plain stand-in for a game scene: dark sky over a green pitch, so the panel's translucency shows.</summary>

@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RLOverlay.App.Services;
 using RLOverlay.Core.Config;
+using RLOverlay.Core.Players;
 using RLOverlay.Core.Playlists;
 
 namespace RLOverlay.App.ViewModels;
@@ -84,8 +85,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private static readonly string[] LiveProperties =
     [
-        nameof(OffsetX), nameof(OffsetY), nameof(ScalePercent), nameof(ToggleHotkey), nameof(CycleHotkey), nameof(DefaultPlaylist),
-        nameof(SelectedScreen), nameof(KeepOpenAtKickoff),
+        nameof(OffsetX), nameof(OffsetY), nameof(ScalePercent), nameof(ToggleHotkey), nameof(CycleHotkey), nameof(FavouritesHotkey),
+        nameof(DefaultPlaylist), nameof(SelectedScreen), nameof(KeepOpenAtKickoff), nameof(FavouritesPerPage),
     ];
 
     /// <summary>The first Screen entry, and the default.</summary>
@@ -125,6 +126,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         _keepOpenAtKickoff = _original.KeepOpenAtKickoff;
         _toggleHotkey = Display(_original.ToggleHotkey, "Ctrl+R");
         _cycleHotkey = Display(_original.CycleHotkey, "Ctrl+G");
+        _favouritesHotkey = Display(_original.FavouritesHotkey, "Ctrl+F");
+        _favouritesPerPage = FavouritePages.NormalizeSize(_original.FavouritesPerPage);
         _offsetX = _original.OffsetX;
         _offsetY = _original.OffsetY;
         _scalePercent = Math.Round(_original.Scale * 100);
@@ -188,7 +191,22 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private string _cycleHotkey;
 
-    /// <summary>"toggle" / "cycle" while that shortcut is being recorded, else null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FavouritesHint))]
+    private string _favouritesHotkey;
+
+    /// <summary>Favourites screen: players per page.</summary>
+    [ObservableProperty]
+    private int _favouritesPerPage;
+
+    /// <summary>The page sizes on offer.</summary>
+    public IReadOnlyList<int> PerPageChoices => FavouritePages.Sizes;
+
+    /// <summary>Under the FAVOURITES card, with the shortcut as edited.</summary>
+    public string FavouritesHint =>
+        $"Click the star next to a name in the lobby to save that player; {FavouritesHotkey} shows everyone you saved. 20 per page makes a tall screen.";
+
+    /// <summary>"toggle" / "cycle" / "favourites" while that shortcut is being recorded, else null.</summary>
     [ObservableProperty]
     private string? _recording;
 
@@ -263,13 +281,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Called by the window when a shortcut was pressed while recording.</summary>
     public void SetHotkey(string target, HotkeyGesture gesture)
     {
-        if (target == "toggle")
+        switch (target)
         {
-            ToggleHotkey = gesture.ToString();
-        }
-        else
-        {
-            CycleHotkey = gesture.ToString();
+            case "toggle":
+                ToggleHotkey = gesture.ToString();
+                break;
+            case "favourites":
+                FavouritesHotkey = gesture.ToString();
+                break;
+            default:
+                CycleHotkey = gesture.ToString();
+                break;
         }
 
         Error = null;
@@ -308,6 +330,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         };
         s.ToggleHotkey = ToggleHotkey;
         s.CycleHotkey = CycleHotkey;
+        s.FavouritesHotkey = FavouritesHotkey;
+        s.FavouritesPerPage = FavouritesPerPage;
         s.OffsetX = Math.Round(OffsetX);
         s.OffsetY = Math.Round(OffsetY);
         s.Scale = Math.Round(ScalePercent) / 100;
@@ -321,14 +345,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Null when the edits can be saved, else what to fix.</summary>
     public string? Validate()
     {
-        if (!HotkeyGesture.TryParse(ToggleHotkey, out var toggle) || !HotkeyGesture.TryParse(CycleHotkey, out var cycle))
+        if (!HotkeyGesture.TryParse(ToggleHotkey, out var toggle) || !HotkeyGesture.TryParse(CycleHotkey, out var cycle)
+            || !HotkeyGesture.TryParse(FavouritesHotkey, out var favourites))
         {
             return "Each shortcut needs Ctrl, Alt, Shift or Win plus a key.";
         }
 
-        if (toggle == cycle)
+        if (toggle == cycle || toggle == favourites || cycle == favourites)
         {
-            return "The two shortcuts must be different.";
+            return "The shortcuts must all be different.";
         }
 
         var port = PortText.Trim();
@@ -434,6 +459,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         _original.OffsetY = offsetY;
         _original.Scale = scale;
         SetPlacement(offsetX, offsetY, scale);
+    }
+
+    /// <summary>A page size was picked on the favourites screen and saved: show it here too, so Save and Cancel keep it.</summary>
+    public void FavouritesPerPageSaved(int perPage)
+    {
+        _original.FavouritesPerPage = perPage;
+        _suppressLive = true;
+        FavouritesPerPage = perPage;
+        _suppressLive = false;
     }
 
     [RelayCommand]

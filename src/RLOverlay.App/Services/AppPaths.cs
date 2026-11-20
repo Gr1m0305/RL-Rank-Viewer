@@ -19,6 +19,9 @@ internal static class AppPaths
 
     public static string SettingsFile => Path.Combine(Root, "settings.json");
 
+    /// <summary>The players saved with the star (see <see cref="RLOverlay.Core.Players.FavouritesStore"/>).</summary>
+    public static string FavouritesFile => Path.Combine(Root, "favourites.json");
+
     public static string LogsDir => Path.Combine(Root, "logs");
 
     /// <summary>Browser profile for the tracker.gg pages on the overlay screen (their cookies and cache).</summary>

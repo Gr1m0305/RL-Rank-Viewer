@@ -108,6 +108,13 @@ public partial class OverlayWindow : Window
         set => StripHost.Content = value;
     }
 
+    /// <summary>The favourites screen (Ctrl+F), shown in place of the lobby screen while it is open.</summary>
+    public object? Favourites
+    {
+        get => FavouritesHost.Content;
+        set => FavouritesHost.Content = value;
+    }
+
     /// <summary>Creates the HWND without showing the window (needed for hotkeys before the first show).</summary>
     public IntPtr EnsureHandle()
     {
@@ -135,12 +142,21 @@ public partial class OverlayWindow : Window
     /// <summary>Ctrl+G strip wanted on screen.</summary>
     public bool StripOn { get; private set; }
 
+    /// <summary>Favourites screen wanted on screen (Ctrl+F); while it is, it covers the lobby screen.</summary>
+    public bool FavouritesOn { get; private set; }
+
     /// <summary>Temporarily hidden because the game is running but another window is in front.</summary>
     public bool Suppressed { get; private set; }
 
     public void SetPanelVisible(bool on)
     {
         PanelOn = on;
+        UpdateVisibility();
+    }
+
+    public void SetFavouritesVisible(bool on)
+    {
+        FavouritesOn = on;
         UpdateVisibility();
     }
 
@@ -176,6 +192,10 @@ public partial class OverlayWindow : Window
         UpdateVisibility();
     }
 
+    /// <summary>The lobby screen, or the favourites screen while that is open.</summary>
+    private System.Windows.Controls.ContentPresenter ShownScreen =>
+        FavouritesHost.Visibility == Visibility.Visible ? FavouritesHost : PanelHost;
+
     /// <summary>False when the user turned off Windows animations: then the overlay only fades.</summary>
     private static bool RichMotion => SystemParameters.ClientAreaAnimation;
 
@@ -187,17 +207,24 @@ public partial class OverlayWindow : Window
 
     private void UpdateVisibility()
     {
-        var show = (PanelOn || StripOn) && !Suppressed;
+        var screenOn = PanelOn || FavouritesOn;
+        var show = (screenOn || StripOn) && !Suppressed;
         if (show)
         {
             // Strip-only (Ctrl+G while the panel is hidden): collapse the panel. While the window fades out the panel
-            // keeps its layout, so the fade is not cut short.
-            var panelAppears = PanelOn && PanelArea.Visibility != Visibility.Visible;
-            PanelArea.Visibility = PanelOn ? Visibility.Visible : Visibility.Collapsed;
-            if (panelAppears && _wantVisible && RichMotion)
+            // keeps its layout, so the fade is not cut short. The favourites screen, when open, stands in for the lobby.
+            var before = PanelArea.Visibility == Visibility.Visible ? ShownScreen : null;
+            PanelArea.Visibility = screenOn ? Visibility.Visible : Visibility.Collapsed;
+            if (screenOn)
             {
-                // Strip was showing alone and now the panel joins it: stagger the panel in.
-                (PanelHost.Content as IRevealable)?.PlayReveal();
+                FavouritesHost.Visibility = FavouritesOn ? Visibility.Visible : Visibility.Collapsed;
+                PanelHost.Visibility = FavouritesOn ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            if (screenOn && ShownScreen != before && _wantVisible && RichMotion)
+            {
+                // The strip was showing alone and a screen joins it, or the lobby and favourites swap: stagger it in.
+                (ShownScreen.Content as IRevealable)?.PlayReveal();
             }
 
             ShowAnimated();
@@ -618,7 +645,7 @@ public partial class OverlayWindow : Window
 
         if (fresh && PanelArea.Visibility == Visibility.Visible)
         {
-            (PanelHost.Content as IRevealable)?.PlayReveal();
+            (ShownScreen.Content as IRevealable)?.PlayReveal();
         }
     }
 

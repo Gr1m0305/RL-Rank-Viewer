@@ -45,7 +45,8 @@ public partial class SettingsWindow : Window
         _ = NativeMethods.DwmSetWindowAttribute(hwnd, NativeMethods.DWMWA_USE_IMMERSIVE_DARK_MODE, ref on, sizeof(int));
     }
 
-    private string Target(Button button) => button == ToggleKeyField ? "toggle" : "cycle";
+    private string Target(Button button) =>
+        button == ToggleKeyField ? "toggle" : button == FavouritesKeyField ? "favourites" : "cycle";
 
     private void OnShortcutClicked(object sender, RoutedEventArgs e)
     {

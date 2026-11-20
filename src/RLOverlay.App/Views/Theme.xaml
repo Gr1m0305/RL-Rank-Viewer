@@ -18,6 +18,10 @@
     <SolidColorBrush x:Key="WinGreen" Color="#3BD07A" />
     <SolidColorBrush x:Key="LossRed" Color="#F0474D" />
     <SolidColorBrush x:Key="WaitingYellow" Color="#F5C518" />
+    <SolidColorBrush x:Key="FavouriteGold" Color="#FFC93C" />
+
+    <!-- The favourite star (a 16 x 15 box), outlined or filled. -->
+    <PathGeometry x:Key="StarGeometry" Figures="M8,0.7 L10.01,5.53 L15.23,5.95 L11.25,9.36 L12.47,14.45 L8,11.72 L3.53,14.45 L4.75,9.36 L0.77,5.95 L5.99,5.53 Z" />
 
     <!-- Dark translucent glass -->
     <LinearGradientBrush x:Key="PanelBackground" StartPoint="0,0" EndPoint="0,1">
@@ -56,6 +60,13 @@
                        HorizontalAlignment="Center" />
         </Border>
     </DataTemplate>
+
+    <!-- A button that is only its content (the overlay's star, header hints and page buttons draw their own look). -->
+    <ControlTemplate x:Key="BareButton" TargetType="Button">
+        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+            <ContentPresenter />
+        </Border>
+    </ControlTemplate>
 
     <ItemsPanelTemplate x:Key="HorizontalPanel">
         <StackPanel Orientation="Horizontal" />

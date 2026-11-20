@@ -10,6 +10,7 @@ using RLOverlay.App.Services;
 using RLOverlay.App.ViewModels;
 using RLOverlay.App.Views;
 using RLOverlay.Core.Config;
+using RLOverlay.Core.Players;
 using RLOverlay.Core.StatsApi;
 using RLOverlay.Core.Updates;
 using Serilog;
@@ -38,6 +39,9 @@ public partial class App : Application
     private OverlaySettings _settings = new();
     private PanelViewModel? _panel;
     private TrackerPanelView? _panelView;
+    private FavouritesService? _favourites;
+    private PanelViewModel? _favouritesPanel;
+    private TrackerPanelView? _favouritesView;
     private OverlayWindow? _window;
     private HotkeyManager? _hotkeys;
     private GameWindowTracker? _tracker;
@@ -250,39 +254,44 @@ public partial class App : Application
 
     private void BuildOverlay()
     {
+        // Favourites: the stars next to the names and the Ctrl+F screen (kept in favourites.json).
+        var favourites = new FavouritesService(
+            new FavouritesStore(AppPaths.FavouritesFile, LoggerFactory.CreateLogger<FavouritesStore>()),
+            LoggerFactory.CreateLogger<FavouritesService>())
+        {
+            AllowSamples = _args.Demo,
+        };
+        _favourites = favourites;
         _panel = new PanelViewModel();
+        _favouritesPanel = new PanelViewModel { IsFavourites = true, FavouriteSource = () => favourites.Players };
+        _favouritesPanel.PerPageChosen += OnFavouritesPerPageChosen;
 
         _tracker = new GameWindowTracker(LoggerFactory.CreateLogger<GameWindowTracker>());
         _links = new LinkOpener(_args.DryRunLinks, LoggerFactory.CreateLogger<LinkOpener>());
         _window = new OverlayWindow { Logger = LoggerFactory.CreateLogger<OverlayWindow>() };
-        _panelView = new TrackerPanelView(url => _links.Open(url), LoggerFactory.CreateLogger<TrackerPanelView>()) { DataContext = _panel };
+        _panelView = new TrackerPanelView(url => _links.Open(url), LoggerFactory.CreateLogger<TrackerPanelView>(), favourites) { DataContext = _panel };
         _panelView.SetZoom(_settings.Scale);
+        _panelView.HintClicked += OnHotkey;
+        _favouritesView = new TrackerPanelView(url => _links.Open(url), LoggerFactory.CreateLogger<TrackerPanelView>(), favourites) { DataContext = _favouritesPanel };
+        _favouritesView.SetZoom(_settings.Scale);
+        _favouritesView.HintClicked += OnHotkey;
         _window.Panel = _panelView;
+        _window.Favourites = _favouritesView;
         _window.Strip = new PlaylistStripView { DataContext = _panel.Strip };
         _window.EnsureHandle();
         _window.Configure(ScreenFor(_settings.Screen), _settings.OffsetX, _settings.OffsetY, _settings.Scale);
         _window.PlacementChanged += OnPlacementChanged;
 
-        _coordinator = new OverlayCoordinator(_settings, _panel, _window, LoggerFactory.CreateLogger<OverlayCoordinator>())
+        _coordinator = new OverlayCoordinator(_settings, _panel, _favouritesPanel, _window, LoggerFactory.CreateLogger<OverlayCoordinator>())
         {
             SampleLobby = _args.Demo,
         };
+        _coordinator.PlayerSeen += favourites.Seen;
         _panel.IsSample = _args.Demo;
 
         _hotkeys = new HotkeyManager(_window.Source!, LoggerFactory.CreateLogger<HotkeyManager>());
         ApplyHotkeyBindings();
-        _hotkeys.Pressed += hotkey =>
-        {
-            switch (hotkey)
-            {
-                case OverlayHotkey.TogglePanel:
-                    _coordinator.TogglePanel();
-                    break;
-                case OverlayHotkey.CyclePlaylist:
-                    _coordinator.CyclePlaylist();
-                    break;
-            }
-        };
+        _hotkeys.Pressed += OnHotkey;
 
         _tracker.GameForegroundChanged += _ => UpdateForegroundGate();
         _tracker.ExclusiveFullscreenDetected += OnExclusiveFullscreen;
@@ -290,11 +299,40 @@ public partial class App : Application
         UpdateForegroundGate();
     }
 
+    /// <summary>A shortcut was pressed, or its hint in the screen's header was clicked.</summary>
+    private void OnHotkey(OverlayHotkey hotkey)
+    {
+        switch (hotkey)
+        {
+            case OverlayHotkey.TogglePanel:
+                _coordinator?.TogglePanel();
+                break;
+            case OverlayHotkey.CyclePlaylist:
+                _coordinator?.CyclePlaylist();
+                break;
+            case OverlayHotkey.Favourites:
+                _coordinator?.ToggleFavourites();
+                break;
+        }
+    }
+
+    /// <summary>A page size was picked on the favourites screen: saved straight away (and shown in the settings).</summary>
+    private void OnFavouritesPerPageChosen(int perPage)
+    {
+        var settings = _settings.Clone();
+        settings.FavouritesPerPage = perPage;
+        _settings = settings.Normalize();
+        _store?.Save(_settings);
+        (_settingsWindow?.DataContext as SettingsViewModel)?.FavouritesPerPageSaved(_settings.FavouritesPerPage);
+        _log.LogInformation("Favourites: {PerPage} per page", _settings.FavouritesPerPage);
+    }
+
     private void ApplyHotkeyBindings()
     {
         HotkeyGesture.TryParse(_settings.ToggleHotkey, out var toggle);
         HotkeyGesture.TryParse(_settings.CycleHotkey, out var cycle);
-        _hotkeys!.SetBindings(toggle, cycle);
+        HotkeyGesture.TryParse(_settings.FavouritesHotkey, out var favourites);
+        _hotkeys!.SetBindings(toggle, cycle, favourites);
     }
 
     /// <summary>
@@ -597,6 +635,7 @@ public partial class App : Application
         _coordinator?.Dispose();
         _tray?.Dispose();
         _panelView?.Dispose();
+        _favouritesView?.Dispose();
         _window?.Close();
         _showSettingsWait?.Unregister(null);
         _showSettingsSignal?.Dispose();

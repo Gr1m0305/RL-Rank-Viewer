@@ -1,3 +1,4 @@
+using RLOverlay.Core.Players;
 using RLOverlay.Core.Playlists;
 
 namespace RLOverlay.Core.Config;
@@ -42,6 +43,12 @@ public sealed class OverlaySettings
     public string ToggleHotkey { get; set; } = "Ctrl+R";
 
     public string CycleHotkey { get; set; } = "Ctrl+G";
+
+    /// <summary>Opens and closes the favourites screen. Missing in older files, so no new schema version.</summary>
+    public string FavouritesHotkey { get; set; } = "Ctrl+F";
+
+    /// <summary>Players on each page of the favourites screen: 5 (the default), 10 or 20.</summary>
+    public int FavouritesPerPage { get; set; } = FavouritePages.DefaultSize;
 
     // Position (DIPs from the top-right corner, see PanelPlacement; set by dragging the screen) and size
     public double OffsetX { get; set; }
@@ -102,13 +109,27 @@ public sealed class OverlaySettings
             CycleHotkey = "Ctrl+G";
         }
 
+        // Someone who already put another shortcut on Ctrl+F gets the favourites on the next free one.
+        if (!HotkeyGesture.TryParse(FavouritesHotkey, out var favourites) || Taken(favourites))
+        {
+            FavouritesHotkey = FavouritesFallbacks.FirstOrDefault(f => HotkeyGesture.TryParse(f, out var g) && !Taken(g)) ?? "Ctrl+Alt+F";
+        }
+
+        FavouritesPerPage = FavouritePages.NormalizeSize(FavouritesPerPage);
+
         if (StatsApiPort is { } port && (port <= 0 || port > 65535))
         {
             StatsApiPort = null;
         }
 
         return this;
+
+        bool Taken(HotkeyGesture gesture) =>
+            (HotkeyGesture.TryParse(ToggleHotkey, out var toggle) && toggle == gesture)
+            || (HotkeyGesture.TryParse(CycleHotkey, out var cycle) && cycle == gesture);
     }
+
+    private static readonly string[] FavouritesFallbacks = ["Ctrl+F", "Ctrl+Shift+F", "Ctrl+Alt+F"];
 
     /// <summary>
     /// Brings settings saved by an older version up to date. Version 1 (the RapidAPI panel) had every stat column on
