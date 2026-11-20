@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 namespace RLOverlay.Core.Scenarios;
 
 /// <summary>
-/// A scripted Stats API session, used by tools/FakeStatsServer and by <c>--demo</c>.
+/// A scripted Stats API session, used by <c>--demo</c> and the settings Preview.
 /// Steps mutate a roster or emit events at given times; <see cref="ScenarioPlayer"/> also emits UpdateState ticks
 /// with the current roster at <see cref="TickRate"/> while a match is active.
 /// </summary>

@@ -9,7 +9,7 @@ namespace RLOverlay.App.Services;
 
 /// <summary>
 /// Plays a scenario in-process (for <c>--demo</c> and the settings Preview): builds the same Stats API envelopes the
-/// FakeStatsServer would send and pushes them through the real parser on the UI thread.
+/// game would send and pushes them through the real parser on the UI thread.
 /// </summary>
 internal sealed class ScenarioFeed : IDisposable
 {

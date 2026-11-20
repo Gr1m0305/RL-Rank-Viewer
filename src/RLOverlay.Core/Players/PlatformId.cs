@@ -69,8 +69,8 @@ public sealed record PlatformId(Platform Platform, string Uid, int Splitscreen, 
     }
 
     /// <summary>
-    /// Only "Steam" and "Epic" appear in the official docs. The other spellings are best guesses
-    /// (see docs/STATS_API_NOTES.md section 8) and are matched case-insensitively.
+    /// Only "Steam" and "Epic" appear in the official docs. The other spellings are best guesses and are matched
+    /// case-insensitively.
     /// </summary>
     public static Platform ParsePlatform(string? value)
     {

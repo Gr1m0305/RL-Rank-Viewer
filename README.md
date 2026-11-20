@@ -214,34 +214,12 @@ dotnet run --project src/RLOverlay.App -- --demo
 ```
 
 `--demo` plays a scripted lobby of made-up players, with placeholders where tracker.gg's rows go (the published exe
-takes the same flag). To test the real path, run the fake Stats API server in one terminal and the overlay in
-another:
+takes the same flag).
 
-```bash
-dotnet run --project tools/FakeStatsServer -- tests/fixtures/scenarios/lobby_2v2.json --port 49200
-```
-
-```bash
-dotnet run --project src/RLOverlay.App -- --port 49200 --always-connect --ungated-hotkeys --dry-run-links
-```
-
-(`--always-connect` skips standby, since Rocket League itself isn't running.) The scenario's names are made up, so
-most rows say *Not found on tracker.gg* (or show whoever really uses that name); put real tracker.gg names in a copy
-of the scenario to see real rows.
-
-Players join over 5 s, the lobby waits about 30 s (try `Ctrl+G`, `Ctrl+R`), kickoff hides it at 33 s and the
-match is destroyed at 66 s (the lobby stays: `Ctrl+R` shows it). Type `kickoff`, `countdown`, `created`,
-`destroyed`, `ended` or `quit` in the server window to send those events right away. `lobby_3v3.json` is a 3v3
-lobby. All launch flags are listed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#launch-flags).
-
-## Build and test
+## Build
 
 ```bash
 dotnet build RLOverlay.sln
-```
-
-```bash
-dotnet test RLOverlay.sln
 ```
 
 ## Troubleshooting
@@ -275,12 +253,6 @@ can be deleted.
 portable copy: turn off *Start with Windows*, quit from the tray, delete the exe and `%LOCALAPPDATA%\RLOverlay`.
 Either way the ini backups stay next to the game's ini files and the Stats API stays on until you set
 `PacketSendRate=0` again.
-
-## Docs
-
-* [docs/STATS_API_NOTES.md](docs/STATS_API_NOTES.md): what the Stats API sends and how the app reads it
-* [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, data flow, match lifecycle state machine, launch flags
-* [PROGRESS.md](PROGRESS.md): build log, decisions and open questions
 
 ## Licence notes
 

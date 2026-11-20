@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace RLOverlay.App.Services;
 
-/// <summary>Command-line flags (see docs/ARCHITECTURE.md, "Launch flags").</summary>
+/// <summary>Command-line flags.</summary>
 internal sealed record AppArgs
 {
     /// <summary>
@@ -33,8 +33,8 @@ internal sealed record AppArgs
     public bool EnableStatsApi { get; init; }
 
     /// <summary>
-    /// Connect to the Stats API right away and keep trying, even while Rocket League is not running (testing with
-    /// FakeStatsServer). Normally the app waits in standby and connects when the game starts.
+    /// Connect to the Stats API right away and keep trying, even while Rocket League is not running (testing with a
+    /// stand-in server). Normally the app waits in standby and connects when the game starts.
     /// </summary>
     public bool AlwaysConnect { get; init; }
 

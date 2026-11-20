@@ -1,6 +1,6 @@
 namespace RLOverlay.Core.StatsApi;
 
-/// <summary>A parsed Stats API message. See docs/STATS_API_NOTES.md for the wire format.</summary>
+/// <summary>A parsed Stats API message.</summary>
 public abstract record StatsMessage(string EventName, string? MatchGuid);
 
 /// <summary>The periodic tick (<c>PacketSendRate</c> times per second).</summary>

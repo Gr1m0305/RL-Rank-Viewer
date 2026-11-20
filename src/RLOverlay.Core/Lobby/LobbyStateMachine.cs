@@ -5,7 +5,7 @@ namespace RLOverlay.Core.Lobby;
 
 /// <summary>
 /// Pure match-lifecycle and roster state. Feed it Stats API messages and user toggles; it returns the effects for the
-/// UI to apply. Not thread-safe: call from one thread (the UI thread). See docs/ARCHITECTURE.md for the diagram.
+/// UI to apply. Not thread-safe: call from one thread (the UI thread).
 /// </summary>
 public sealed class LobbyStateMachine
 {

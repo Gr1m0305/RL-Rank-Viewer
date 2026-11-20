@@ -17,7 +17,7 @@ public sealed record StatsApiIniValues(double? PacketSendRate, int? Port, int? W
 public sealed record StatsApiIniEditResult(string Path, bool Created, bool Changed, string? BackupPath, IReadOnlyList<string> Changes);
 
 /// <summary>
-/// Reads and edits the Stats API section of Rocket League's ini files (see docs/STATS_API_NOTES.md, section 1).
+/// Reads and edits the Stats API section of Rocket League's ini files.
 /// Only <c>PacketSendRate</c> and <c>Port</c> in <c>[TAGame.MatchStatsExporter_TA]</c> are ever changed; every other
 /// line, comment, line ending and the file's encoding are kept. A backup is written before any change.
 /// </summary>
