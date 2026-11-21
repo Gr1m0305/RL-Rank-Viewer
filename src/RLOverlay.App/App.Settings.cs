@@ -229,6 +229,17 @@ public partial class App : ISettingsHost
         _updates?.InstallNow();
     }
 
+    (bool Added, string Message) ISettingsHost.AddFavouriteFromLink(string link)
+    {
+        if (_favourites is null)
+        {
+            return (false, "The favourites aren't loaded yet.");
+        }
+
+        var result = _favourites.AddFromLink(link);
+        return (result.Outcome == RLOverlay.Core.Players.FavouriteLinkOutcome.Added, FavouritesService.Describe(result, fromClipboard: false));
+    }
+
     (string Summary, IReadOnlyList<StatsApiFileStatus> Files) ISettingsHost.StatsApiStatus()
     {
         var installs = _setup!.FindInstalls();

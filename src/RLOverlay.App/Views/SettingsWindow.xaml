@@ -215,20 +215,49 @@
                 <!-- Favourites -->
                 <TextBlock Text="FAVOURITES" Style="{StaticResource SectionHeader}" />
                 <Border Style="{StaticResource Card}">
-                    <DockPanel>
-                        <ComboBox DockPanel.Dock="Right" Style="{StaticResource Combo}" ItemsSource="{Binding PerPageChoices}"
-                                  SelectedItem="{Binding FavouritesPerPage}" VerticalAlignment="Center" AutomationProperties.Name="Players per page">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding StringFormat={}{0} players}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <StackPanel Margin="0,0,16,0">
-                            <TextBlock Text="Players per page" Style="{StaticResource Label}" />
-                            <TextBlock Text="{Binding FavouritesHint}" Style="{StaticResource Hint}" />
-                        </StackPanel>
-                    </DockPanel>
+                    <StackPanel>
+                        <DockPanel>
+                            <ComboBox DockPanel.Dock="Right" Style="{StaticResource Combo}" ItemsSource="{Binding PerPageChoices}"
+                                      SelectedItem="{Binding FavouritesPerPage}" VerticalAlignment="Center" AutomationProperties.Name="Players per page">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding StringFormat={}{0} players}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <StackPanel Margin="0,0,16,0">
+                                <TextBlock Text="Players per page" Style="{StaticResource Label}" />
+                                <TextBlock Text="{Binding FavouritesHint}" Style="{StaticResource Hint}" />
+                            </StackPanel>
+                        </DockPanel>
+                        <Border Style="{StaticResource Divider}" />
+                        <TextBlock Text="Add a player from tracker.gg" Style="{StaticResource Label}" />
+                        <TextBlock Text="Copy the address of their tracker.gg profile and paste it here." Style="{StaticResource Hint}" />
+                        <DockPanel Margin="0,10,0,0">
+                            <Button DockPanel.Dock="Right" Content="Add" Style="{StaticResource SecondaryButton}" Margin="10,0,0,0"
+                                    Command="{Binding AddFavouriteLinkCommand}" AutomationProperties.Name="Add to favourites" />
+                            <Grid>
+                                <TextBox x:Name="FavouriteLinkField" Style="{StaticResource Field}" Text="{Binding FavouriteLink, UpdateSourceTrigger=PropertyChanged}"
+                                         PreviewKeyDown="OnFavouriteLinkKeyDown" AutomationProperties.Name="tracker.gg profile link" />
+                                <TextBlock Text="https://rocketleague.tracker.network/rocket-league/profile/…" IsHitTestVisible="False" FontSize="13.5"
+                                           Margin="10,0,10,0" VerticalAlignment="Center" Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"
+                                           Visibility="{Binding FavouriteLink, Converter={StaticResource EmptyToVisibility}}" />
+                            </Grid>
+                        </DockPanel>
+                        <TextBlock Text="{Binding FavouriteLinkMessage}" Margin="0,8,0,0"
+                                   Visibility="{Binding FavouriteLinkMessage, Converter={StaticResource NotEmptyToVisibility}}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource Hint}">
+                                    <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding FavouriteLinkAdded}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource WinGreen}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
                 </Border>
 
                 <!-- Position and size -->

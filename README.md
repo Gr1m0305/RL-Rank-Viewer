@@ -24,7 +24,7 @@ tracker.gg page. The repository holds no screenshots of tracker.gg pages because
 | `Ctrl+G` | Next playlist: 1v1, 2v2, 3v3, Hoops, Rumble, Dropshot, Snow Day, Heatseeker, Tournaments, Casual. Every row moves at once, without reloading |
 | `Ctrl+F` | Open / close your favourites (see [Favourites](#favourites)) |
 | Click a name | Opens that player's tracker.gg profile in your browser |
-| Click the star by a name | Saves that player as a favourite (gold star); click again to remove them |
+| Click the star by a name | Saves that player as a favourite (gold star); click again to remove them. A tracker.gg profile link adds someone too (see [Favourites](#favourites)) |
 | Drag the header | Moves the panel anywhere on its screen (the dotted grip on the right shows where to grab) |
 | *Refresh* (header) | Loads every player's tracker.gg page again, for example when ranks moved since the pages loaded |
 | Drag a corner | Resizes the panel, from 75 % to 150 % (blue brackets show the corners when the pointer is over them) |
@@ -178,10 +178,17 @@ since tracker.gg has no profile for them.
 `Ctrl+F` (or clicking *Favourites* in the header) opens the favourites screen in place of the lobby: every saved
 player's tracker.gg row for the selected playlist, newest first, **5 per page**. Use **‹ ›** at the bottom to turn the
 pages and **5 / 10** to show more at once; the choice is kept, and is also in Settings → *Favourites*. `Ctrl+G`
-switches the playlist
-here too, a star clicked off stays on the page until you turn it (so a slip can be undone), and clicking a name opens
-the full profile. `Ctrl+F` again closes it and the lobby comes back; `Ctrl+R` goes straight to the lobby. The
-favourites also close at kickoff and when a new lobby loads.
+switches the playlist here too, a star clicked off stays on the page until you turn it (so a slip can be undone), and
+clicking a name opens the full profile. `Ctrl+F` again closes it and the lobby comes back; `Ctrl+R` goes straight to
+the lobby. The favourites also close at kickoff and when a new lobby loads.
+
+**Add someone from tracker.gg:** open their Rocket League profile on tracker.gg, copy the address (for example
+`https://rocketleague.tracker.network/rocket-league/profile/epic/Name/overview`) and either click **+ Paste link** on
+the favourites screen or paste it into Settings → *Favourites* → *Add a player from tracker.gg*. Any page of the
+profile works. A Steam link holds the player's account id, so they are saved just as if you had starred them (their
+name shows once they are in one of your lobbies). Epic, PlayStation, Xbox and Switch links hold the name instead, so
+those players are kept by name until they turn up in a lobby, where their star is already gold and the app learns their
+account.
 
 A saved player who turns up under a new name keeps the new one, so their row keeps working (tracker.gg finds every
 platform but Steam by name).
@@ -267,7 +274,7 @@ dotnet build RLOverlay.sln
 | Path | Contents |
 |---|---|
 | `%LOCALAPPDATA%\RLOverlay\settings.json` | settings |
-| `%LOCALAPPDATA%\RLOverlay\favourites.json` | your favourites (platform, account id, last name seen, when added) |
+| `%LOCALAPPDATA%\RLOverlay\favourites.json` | your favourites (platform, account id, last name seen, when added; `@Name` instead of the account id for a player added from a link until they turn up in a lobby) |
 | `%LOCALAPPDATA%\RLOverlay\logs\` | daily logs, 7 kept |
 | `%LOCALAPPDATA%\RLOverlay\webview\` | the built-in browser's data (tracker.gg cookies and cache) |
 | `%LOCALAPPDATA%\RLOverlay\updates\` | a downloaded update's setup file, until it is installed |

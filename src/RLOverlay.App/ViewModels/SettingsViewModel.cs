@@ -49,6 +49,12 @@ public interface ISettingsHost
 
     /// <summary>Installs the downloaded update now (closes the settings window; the overlay restarts).</summary>
     void InstallUpdate();
+
+    /// <summary>
+    /// Saves the player behind a pasted tracker.gg profile link as a favourite straight away (like the star, not on
+    /// Save). Message: what happened, for under the field.
+    /// </summary>
+    (bool Added, string Message) AddFavouriteFromLink(string link);
 }
 
 public sealed partial class PlaylistOption(Playlist playlist, string label, bool isEnabled) : ObservableObject
@@ -205,6 +211,40 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>Under the FAVOURITES card, with the shortcut as edited.</summary>
     public string FavouritesHint =>
         $"{FavouritesHotkey} shows everyone you saved with the star next to their name in the lobby.";
+
+    /// <summary>A tracker.gg profile link being pasted in to add that player.</summary>
+    [ObservableProperty]
+    private string _favouriteLink = "";
+
+    /// <summary>What the last Add did ("Added Velvet Comet (Epic Games).").</summary>
+    [ObservableProperty]
+    private string _favouriteLinkMessage = "";
+
+    /// <summary>The last Add saved a player (the message shows in green).</summary>
+    [ObservableProperty]
+    private bool _favouriteLinkAdded;
+
+    partial void OnFavouriteLinkChanged(string value)
+    {
+        if (value.Length > 0)
+        {
+            FavouriteLinkMessage = "";
+        }
+    }
+
+    /// <summary>Saves the player at once, like the star (Cancel doesn't take it back).</summary>
+    [RelayCommand]
+    private void AddFavouriteLink()
+    {
+        var (added, message) = _host.AddFavouriteFromLink(FavouriteLink);
+        FavouriteLinkAdded = added;
+        if (added)
+        {
+            FavouriteLink = "";
+        }
+
+        FavouriteLinkMessage = message;
+    }
 
     /// <summary>"toggle" / "cycle" / "favourites" while that shortcut is being recorded, else null.</summary>
     [ObservableProperty]

@@ -106,6 +106,9 @@ public sealed partial class PanelViewModel : ObservableObject
     /// <summary>Favourites screen: the user picked another page size on it (the app saves it).</summary>
     public event Action<int>? PerPageChosen;
 
+    // Favourites screen: what a pasted link did, in the footer until the page changes or the app clears it.
+    private string? _notice;
+
     /// <summary>The label next to the favourites shortcut in the header.</summary>
     public string FavouritesHint => IsFavourites ? "Close" : "Favourites";
 
@@ -222,6 +225,7 @@ public sealed partial class PanelViewModel : ObservableObject
     public void ShowFavourites()
     {
         Page = 0;
+        _notice = null;
         ReloadFavourites();
     }
 
@@ -230,19 +234,47 @@ public sealed partial class PanelViewModel : ObservableObject
     {
         _favourites = [];
         Page = 0;
+        _notice = null;
         Refresh();
     }
 
     public void NextPage()
     {
         Page++;
+        _notice = null;
         ReloadFavourites();
     }
 
     public void PreviousPage()
     {
         Page--;
+        _notice = null;
         ReloadFavourites();
+    }
+
+    /// <summary>
+    /// Favourites screen: what a pasted link did, shown in the footer. After an add the first page shows, where the new
+    /// player is (newest first).
+    /// </summary>
+    public void ShowNotice(string text, bool added)
+    {
+        _notice = text;
+        if (added)
+        {
+            Page = 0;
+        }
+
+        ReloadFavourites();
+    }
+
+    /// <summary>The footer's usual text again.</summary>
+    public void ClearNotice()
+    {
+        if (_notice is not null)
+        {
+            _notice = null;
+            Refresh();
+        }
     }
 
     /// <summary>
@@ -259,6 +291,7 @@ public sealed partial class PanelViewModel : ObservableObject
 
         Page = FavouritePages.Resized(Page, PerPage, perPage);
         PerPage = perPage;
+        _notice = null;
         ReloadFavourites();
         PerPageChosen?.Invoke(perPage);
     }
@@ -349,9 +382,9 @@ public sealed partial class PanelViewModel : ObservableObject
         CountText = total == 0 ? "" : $"{first + 1}–{first + shown.Count} of {total}";
         CanGoBack = Page > 0;
         CanGoForward = Page < pages - 1;
-        FooterLeft = total == 0
-            ? "No favourites yet · click the star next to a name in the lobby to save that player"
-            : "Newest first · click a name for the full profile";
+        FooterLeft = _notice ?? (total == 0
+            ? "No favourites yet · click the star next to a name in the lobby, or copy a tracker.gg profile link and click Paste link"
+            : "Newest first · click a name for the full profile");
         FooterRight = "";
         ShownPlayers = shown
             .Select(f => f.ToPlatformId())

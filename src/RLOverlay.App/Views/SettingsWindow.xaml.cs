@@ -26,6 +26,19 @@ public partial class SettingsWindow : Window
         PlaceAwayFromOverlay();
     }
 
+    /// <summary>Enter in the tracker.gg link field adds the player (instead of pressing Save, which would close the window).</summary>
+    private void OnFavouriteLinkKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Enter or Key.Return)
+        {
+            e.Handled = true;
+            if (_vm.AddFavouriteLinkCommand.CanExecute(null))
+            {
+                _vm.AddFavouriteLinkCommand.Execute(null);
+            }
+        }
+    }
+
     /// <summary>
     /// The overlay sits at the top centre of the screen, so open in the lower right where it covers the least of it.
     /// </summary>

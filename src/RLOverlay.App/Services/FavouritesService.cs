@@ -1,5 +1,6 @@
 using System.IO;
 using Microsoft.Extensions.Logging;
+using RLOverlay.App.Views;
 using RLOverlay.Core.Lobby;
 using RLOverlay.Core.Players;
 
@@ -71,16 +72,54 @@ internal sealed class FavouritesService : IFavouriteMarks
         Changed?.Invoke();
     }
 
-    /// <summary>A player in the lobby: if they are a favourite under another name now, keep the new name.</summary>
+    /// <summary>
+    /// A player in the lobby: if they are a favourite under another name now, keep the new name (and the account id of
+    /// one added from a link by name).
+    /// </summary>
     public void Seen(LobbyPlayer player)
     {
         if (_list.Rename(player.Id))
         {
-            _logger.LogInformation("Favourites: {Name} ({Platform}) has a new name", player.Name, player.Id.Platform);
+            _logger.LogInformation("Favourites: {Name} ({Platform}) updated from the lobby", player.Name, player.Id.Platform);
             Save();
             Changed?.Invoke();
         }
     }
+
+    /// <summary>A player's tracker.gg profile link, pasted in Settings or on the favourites screen.</summary>
+    public FavouriteLinkResult AddFromLink(string? link)
+    {
+        var result = _list.AddFromLink(link, DateTime.UtcNow);
+        if (result is { Outcome: FavouriteLinkOutcome.Added, Player: { } player })
+        {
+            _logger.LogInformation("Favourites: added {Name} ({Platform}) from a tracker.gg link, {Count} saved", player.Name, player.Platform, _list.Count);
+            Save();
+            Changed?.Invoke();
+        }
+        else
+        {
+            _logger.LogInformation("Favourites: link not added ({Outcome})", result.Outcome);
+        }
+
+        return result;
+    }
+
+    /// <summary>What a pasted link did, in a sentence for Settings or the favourites screen's footer.</summary>
+    public static string Describe(FavouriteLinkResult result, bool fromClipboard) => result switch
+    {
+        { Outcome: FavouriteLinkOutcome.Added, Player: { Platform: Platform.Steam } p } =>
+            $"Added a Steam player (id {p.Uid}). Their name shows once they are in one of your lobbies.",
+        { Outcome: FavouriteLinkOutcome.Added, Player: { } p } => $"Added {p.Name} ({PlatformIcons.Name(p.Platform)}).",
+        { Outcome: FavouriteLinkOutcome.AlreadySaved, Player: { } p } => $"{p.Name} is already in your favourites.",
+        { Outcome: FavouriteLinkOutcome.Empty } => fromClipboard
+            ? "Copy a player's tracker.gg profile link first, then click Paste link."
+            : "Paste a player's tracker.gg profile link first.",
+        { Outcome: FavouriteLinkOutcome.SteamNeedsId } =>
+            "That Steam link has a custom name in it: open the profile on tracker.gg and copy the link with the 17-digit Steam id.",
+        _ => fromClipboard
+            ? "What you copied isn't a tracker.gg Rocket League profile link."
+            : "That isn't a tracker.gg Rocket League profile link.",
+    };
 
     private void Save()
     {

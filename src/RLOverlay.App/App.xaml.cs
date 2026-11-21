@@ -275,6 +275,7 @@ public partial class App : Application
         _favouritesView = new TrackerPanelView(url => _links.Open(url), LoggerFactory.CreateLogger<TrackerPanelView>(), favourites) { DataContext = _favouritesPanel };
         _favouritesView.SetZoom(_settings.Scale);
         _favouritesView.HintClicked += OnHotkey;
+        _favouritesView.PasteLinkClicked += OnPasteFavouriteLink;
         _window.Panel = _panelView;
         _window.Favourites = _favouritesView;
         _window.Strip = new PlaylistStripView { DataContext = _panel.Strip };
@@ -317,6 +318,50 @@ public partial class App : Application
     }
 
     /// <summary>A page size was picked on the favourites screen: saved straight away (and shown in the settings).</summary>
+    /// <summary>
+    /// "Paste link" on the favourites screen: the copied text, if it is a tracker.gg profile link, adds that player. The
+    /// footer says what happened for a few seconds.
+    /// </summary>
+    private void OnPasteFavouriteLink()
+    {
+        if (_favourites is null || _favouritesPanel is null)
+        {
+            return;
+        }
+
+        string? text = null;
+        try
+        {
+            if (Clipboard.ContainsText())
+            {
+                text = Clipboard.GetText();
+            }
+        }
+        catch (System.Runtime.InteropServices.ExternalException ex)
+        {
+            _log.LogDebug(ex, "Could not read the clipboard");
+        }
+
+        var result = _favourites.AddFromLink(text);
+        _favouritesPanel.ShowNotice(FavouritesService.Describe(result, fromClipboard: true), result.Outcome == FavouriteLinkOutcome.Added);
+        _pasteNoticeTimer ??= CreatePasteNoticeTimer();
+        _pasteNoticeTimer.Stop();
+        _pasteNoticeTimer.Start();
+    }
+
+    private DispatcherTimer? _pasteNoticeTimer;
+
+    private DispatcherTimer CreatePasteNoticeTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            _favouritesPanel?.ClearNotice();
+        };
+        return timer;
+    }
+
     private void OnFavouritesPerPageChosen(int perPage)
     {
         var settings = _settings.Clone();
@@ -626,6 +671,7 @@ public partial class App : Application
         _log.LogInformation("Exiting");
         _shutdown.Cancel();
         _noticeTimer?.Stop();
+        _pasteNoticeTimer?.Stop();
         _updates?.Dispose();
         _settingsWindow?.Close();
         StopPreviewFeed();

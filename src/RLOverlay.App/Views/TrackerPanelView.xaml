@@ -198,6 +198,8 @@
                         <Button x:Name="PerPage10" Style="{StaticResource PageButton}" Content="10" Tag="10" Click="OnPerPageClick"
                                 AutomationProperties.Name="10 per page" />
                     </StackPanel>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource PageButton}" Content="+ Paste link" Click="OnPasteLinkClick" Margin="16,0,0,0"
+                            ToolTip="Copy a player's tracker.gg profile link, then click here to add them" AutomationProperties.Name="Paste link" />
                     <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,12,0"
                                 Visibility="{Binding HasFavourites, Converter={StaticResource BoolToVisibility}}">
                         <Button Style="{StaticResource PageButton}" Content="‹" Margin="0" Click="OnPreviousPageClick"

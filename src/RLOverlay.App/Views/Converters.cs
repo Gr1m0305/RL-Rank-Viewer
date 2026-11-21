@@ -34,6 +34,16 @@ public sealed class NotEmptyToVisibilityConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>Empty string / null → Visible, else Collapsed (a field's placeholder).</summary>
+public sealed class EmptyToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+        value is null || value is string { Length: 0 } ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 /// <summary>Adds letter spacing by putting hair spaces between characters (WPF TextBlock has no tracking).</summary>
 public sealed class TrackingConverter : IValueConverter
 {

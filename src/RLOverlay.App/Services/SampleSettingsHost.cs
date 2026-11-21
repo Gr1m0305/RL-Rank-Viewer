@@ -70,4 +70,6 @@ internal sealed class SampleSettingsHost : ISettingsHost
     public void InstallUpdate()
     {
     }
+
+    public (bool Added, string Message) AddFavouriteFromLink(string link) => (false, "");
 }

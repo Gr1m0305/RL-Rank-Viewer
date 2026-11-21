@@ -65,6 +65,9 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     /// <summary>A shortcut hint in the header was pressed: do what that shortcut does.</summary>
     public event Action<OverlayHotkey>? HintClicked;
 
+    /// <summary>Favourites screen: "Paste link" was clicked (the app reads the clipboard).</summary>
+    public event Action? PasteLinkClicked;
+
     /// <summary>The browser profile all rows share (cookies, cache), created on first use.</summary>
     private static Task<CoreWebView2Environment> Environment()
     {
@@ -225,6 +228,8 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     private void OnPreviousPageClick(object sender, RoutedEventArgs e) => _vm?.PreviousPage();
 
     private void OnNextPageClick(object sender, RoutedEventArgs e) => _vm?.NextPage();
+
+    private void OnPasteLinkClick(object sender, RoutedEventArgs e) => PasteLinkClicked?.Invoke();
 
     private void OnPerPageClick(object sender, RoutedEventArgs e)
     {

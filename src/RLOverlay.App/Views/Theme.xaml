@@ -43,6 +43,7 @@
     <!-- Converters -->
     <v:BoolToVisibilityConverter x:Key="BoolToVisibility" />
     <v:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
+    <v:EmptyToVisibilityConverter x:Key="EmptyToVisibility" />
     <v:TrackingConverter x:Key="Tracking" />
 
     <!-- Key cap (Ctrl, G, …) -->

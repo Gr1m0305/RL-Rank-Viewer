@@ -6,9 +6,21 @@ using RLOverlay.Core.Config;
 
 namespace RLOverlay.Core.Players;
 
-/// <summary>A player saved with the star next to their name: their account and the name it last had.</summary>
+/// <summary>
+/// A player saved with the star next to their name (or from a tracker.gg link): their account and the name it last had.
+/// </summary>
 public sealed record FavouritePlayer(Platform Platform, string Uid, string Name, DateTime AddedUtc)
 {
+    /// <summary>
+    /// Starts the uid of a player added from a tracker.gg link on Epic, PlayStation, Xbox or Switch: those links carry
+    /// the name, not the account id, so the player is known by name (<c>@Name</c>) until they turn up in a lobby.
+    /// </summary>
+    public const string NameOnlyPrefix = "@";
+
+    /// <summary>Added from a link by name; the account id isn't known yet (see <see cref="NameOnlyPrefix"/>).</summary>
+    [JsonIgnore]
+    public bool IsNameOnly => Uid.StartsWith(NameOnlyPrefix, StringComparison.Ordinal);
+
     /// <summary>The same account on the same platform (case-insensitive), whatever it is called now.</summary>
     [JsonIgnore]
     public string Key => KeyFor(Platform, Uid);
@@ -21,6 +33,19 @@ public sealed record FavouritePlayer(Platform Platform, string Uid, string Name,
     public static string KeyFor(PlatformId id) => KeyFor(id.Platform, id.Uid);
 }
 
+/// <summary>What a pasted tracker.gg link did (see <see cref="FavouriteList.AddFromLink"/>).</summary>
+public enum FavouriteLinkOutcome
+{
+    Added,
+    AlreadySaved,
+    Empty,
+    NotAProfileLink,
+    SteamNeedsId,
+}
+
+/// <param name="Player">The player added, or the one already saved.</param>
+public sealed record FavouriteLinkResult(FavouriteLinkOutcome Outcome, FavouritePlayer? Player = null);
+
 /// <summary>
 /// The players saved as favourites, newest first. Only players tracker.gg can show are kept: no bots, split-screen
 /// guests or unknown platforms.
@@ -32,7 +57,7 @@ public sealed class FavouriteList
     public FavouriteList(IEnumerable<FavouritePlayer>? players = null)
     {
         _players = (players ?? [])
-            .Where(p => p is not null && CanSave(p.ToPlatformId()))
+            .Where(p => p is not null && CanSave(p.ToPlatformId()) && !(p.IsNameOnly && (p.Platform == Platform.Steam || p.Uid.Trim().Length == 1)))
             .OrderByDescending(p => p.AddedUtc)
             .DistinctBy(p => p.Key)
             .ToList();
@@ -59,6 +84,41 @@ public sealed class FavouriteList
         return true;
     }
 
+    /// <summary>
+    /// A player's tracker.gg profile link, pasted by the user: saved at the top of the list. A Steam link carries the
+    /// account id, so the player is saved as if starred in the lobby (as "Steam player 1234", the id's last digits,
+    /// until they turn up in one);
+    /// the other platforms' links carry the name, so the player is saved by name (see
+    /// <see cref="FavouritePlayer.NameOnlyPrefix"/>).
+    /// </summary>
+    public FavouriteLinkResult AddFromLink(string? link, DateTime nowUtc)
+    {
+        switch (TrackerUrls.ParseProfile(link, out var platform, out var identifier))
+        {
+            case ProfileLinkProblem.Empty:
+                return new FavouriteLinkResult(FavouriteLinkOutcome.Empty);
+            case ProfileLinkProblem.SteamNeedsId:
+                return new FavouriteLinkResult(FavouriteLinkOutcome.SteamNeedsId);
+            case ProfileLinkProblem.NotAProfileLink:
+                return new FavouriteLinkResult(FavouriteLinkOutcome.NotAProfileLink);
+        }
+
+        var steam = platform == Platform.Steam;
+        var existing = steam
+            ? _players.FindIndex(p => p.Key == FavouritePlayer.KeyFor(platform, identifier))
+            : _players.FindIndex(p => p.Platform == platform && SameName(p.Name, identifier));
+        if (existing >= 0)
+        {
+            return new FavouriteLinkResult(FavouriteLinkOutcome.AlreadySaved, _players[existing]);
+        }
+
+        var player = steam
+            ? new FavouritePlayer(platform, identifier, $"Steam player {identifier[^4..]}", nowUtc)
+            : new FavouritePlayer(platform, FavouritePlayer.NameOnlyPrefix + identifier, identifier, nowUtc);
+        _players.Insert(0, player);
+        return new FavouriteLinkResult(FavouriteLinkOutcome.Added, player);
+    }
+
     public bool Remove(PlatformId id)
     {
         var index = IndexOf(id);
@@ -72,27 +132,52 @@ public sealed class FavouriteList
     }
 
     /// <summary>
-    /// A saved player was seen under another name: keep the new one, since tracker.gg finds every platform but Steam by
-    /// name. True if it changed.
+    /// A saved player was seen in a lobby: keep the name they have now, since tracker.gg finds every platform but Steam
+    /// by name. One added from a link by name also gets their account id, so later name changes are followed too.
+    /// True if anything changed.
     /// </summary>
     public bool Rename(PlatformId id)
     {
         var index = IndexOf(id);
         var name = id.DisplayName.Trim();
-        if (index < 0 || name.Length == 0 || name == _players[index].Name)
+        if (index < 0 || name.Length == 0)
         {
             return false;
         }
 
-        _players[index] = _players[index] with { Name = name };
+        var saved = _players[index];
+        if (saved.IsNameOnly && !IsNameOnly(id) && CanSave(id))
+        {
+            _players[index] = saved with { Uid = id.Uid.Trim(), Name = name };
+            return true;
+        }
+
+        if (name == saved.Name)
+        {
+            return false;
+        }
+
+        _players[index] = saved with { Name = name };
         return true;
     }
 
     private int IndexOf(PlatformId id)
     {
         var key = FavouritePlayer.KeyFor(id);
-        return _players.FindIndex(p => p.Key == key);
+        var index = _players.FindIndex(p => p.Key == key);
+        if (index >= 0 || id.Platform == Platform.Steam || IsNameOnly(id) || !CanSave(id))
+        {
+            return index;
+        }
+
+        // A player in the lobby may be one added from a link by name, whose account id isn't known yet.
+        var name = id.DisplayName.Trim();
+        return name.Length == 0 ? -1 : _players.FindIndex(p => p.IsNameOnly && p.Platform == id.Platform && SameName(p.Name, name));
     }
+
+    private static bool IsNameOnly(PlatformId id) => id.Uid.Trim().StartsWith(FavouritePlayer.NameOnlyPrefix, StringComparison.Ordinal);
+
+    private static bool SameName(string a, string b) => string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private static string NameOf(PlatformId id) => id.DisplayName.Trim() is { Length: > 0 } name ? name : id.Uid.Trim();
 }
