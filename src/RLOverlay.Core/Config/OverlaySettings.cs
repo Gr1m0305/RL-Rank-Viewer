@@ -162,9 +162,9 @@ public sealed class OverlaySettings
 
 /// <summary>
 /// Which stats are shown next to each player's tracker.gg rank row. Wins, Goals, Shots, Assists, Saves and MVPs are
-/// tracker.gg's lifetime tiles; Peak (this season's peak rating) and Streak (matches and streak) are cells of the
-/// playlist's row; AllTimePeak is the "Best" rating from the profile's Peak Rating card, which tracker.gg only has for
-/// Ranked Duel, Doubles and Standard. Wins, Streak and Peak are on by default.
+/// tracker.gg's lifetime tiles; Peak (this season's peak rating) and Streak (the Matches and Streak cells) are cells of
+/// the playlist's row; AllTimePeak is the "All-Time Best" rating from the profile's Ratings card, which tracker.gg only
+/// has for Ranked Duel, Doubles and Standard. Wins, Streak and Peak are on by default.
 /// </summary>
 public sealed class StatColumns
 {

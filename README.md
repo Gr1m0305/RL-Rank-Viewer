@@ -49,14 +49,17 @@ Each player's row is **tracker.gg's own page**, shown in a small built-in Micros
 player, exactly as if you opened their profile in a tab. The app then hides the rest of the page and shows only:
 
 * the table row for the selected playlist (rank icon, rank and division, rating, the up/down to the next division),
-  plus the *Peak Rating* and *Streak* cells if they are ticked, without the ⋮ menu;
-* for Ranked Duel 1v1, Doubles 2v2 and Standard 3v3, the *All-Time Peak* if it is ticked: the "Best" rank and
-  rating from the page's peak-rating box, labelled *All-Time Peak*. The other playlists have no such box on
+  plus the *Peak Rating* cell if Peak MMR is ticked and the *Matches* and *Streak* cells if Streak is, without the
+  chart link at the end;
+* for Ranked Duel 1v1, Doubles 2v2 and Standard 3v3, the *All-Time Peak* if it is ticked: the "All-Time Best" rank
+  and rating from the page's Ratings box, labelled *All-Time Peak*. The other playlists have no such box on
   tracker.gg's main page, so the column simply isn't there for them;
-* the stat tiles you ticked (*Wins*, *Goals*, *Shots*, *Assists*, *Saves*, *MVPs*), copied from the same page.
+* the stat tiles you ticked (*Wins*, *Goals*, *Shots*, *Assists*, *Saves*, *MVPs*), copied from the page's Lifetime
+  box.
 
-The app finds the row and tiles by their names and measures their size so every player's columns line up. It never
-reads the numbers, so nothing is stored, cached or sent anywhere else.
+The app finds the row by the playlist's name, its cells by the table's column headings and the tiles by their names,
+and measures their size so every player's columns line up. It never reads the numbers, so nothing is stored, cached
+or sent anywhere else.
 
 * Pages start loading as soon as a player joins, so they are usually ready by the time you look. A shimmer marks
   rows still loading; *Refresh* in the header loads every player's page again at once (it is greyed out while there
