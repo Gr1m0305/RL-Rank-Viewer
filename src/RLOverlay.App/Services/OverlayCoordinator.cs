@@ -31,6 +31,7 @@ internal sealed class OverlayCoordinator : IDisposable
     private OverlaySettings _settings;
     private MatchPhase _phaseSeen = MatchPhase.Idle;
     private bool _userCycled;
+    private readonly HashSet<string> _unknownPlatforms = new(StringComparer.OrdinalIgnoreCase);
 
     public OverlayCoordinator(
         OverlaySettings settings,
@@ -288,6 +289,7 @@ internal sealed class OverlayCoordinator : IDisposable
                 case PlayerAddedEffect added:
                     _vm.AddOrUpdate(added.Player);
                     Seen(added.Player);
+                    NoteUnknownPlatform(added.Player);
                     break;
 
                 case PlayerChangedEffect changed:
@@ -297,6 +299,11 @@ internal sealed class OverlayCoordinator : IDisposable
 
                 case PlayerRemovedEffect removed:
                     _vm.Remove(removed.Player.Key);
+                    break;
+
+                case MatchFinishedEffect:
+                    _logger.LogInformation("Match finished: its players' pages load again for their next match");
+                    _vm.FinishMatch();
                     break;
 
                 case PanelVisibilityEffect visibility:
@@ -344,6 +351,19 @@ internal sealed class OverlayCoordinator : IDisposable
         if (kickoff)
         {
             CloseFavourites("kickoff");
+        }
+    }
+
+    /// <summary>
+    /// Logs a platform spelling the app doesn't know (once per spelling), so it can be added: such a player is shown
+    /// without a tracker.gg row. Only the spelling is logged, never the id.
+    /// </summary>
+    private void NoteUnknownPlatform(LobbyPlayer player)
+    {
+        var id = player.Id;
+        if (id.Platform == Core.Players.Platform.Unknown && !id.IsBot && !id.IsSplitscreenGuest && _unknownPlatforms.Add(id.Prefix))
+        {
+            _logger.LogWarning("Stats API: a player's platform is \"{Prefix}\", which the app doesn't know; shown without a tracker.gg row", id.Prefix);
         }
     }
 

@@ -1,4 +1,5 @@
 using RLOverlay.Core.Players;
+using RLOverlay.Core.Playlists;
 using RLOverlay.Core.StatsApi;
 
 namespace RLOverlay.Core.Lobby;
@@ -31,6 +32,12 @@ public sealed class LobbyStateMachine
     // PlayersForNewGame players (then it becomes the lobby) or ends without them (freeplay, training: dropped).
     private LobbyStateMachine? _next;
 
+    // The phase before the session after it was followed: restored if that session is the same match again.
+    private MatchPhase _phaseBeforeNext;
+
+    // The last UpdateState had Game.bReplay set: a goal replay or a Match History replay is playing.
+    private bool _replayPlaying;
+
     /// <summary>
     /// The "Keep the lobby open when the match starts" setting: kickoff no longer hides the panel (whether the game
     /// popped it up or Ctrl+R opened it). Ctrl+R still hides it, and leaving the match still hides a panel the game
@@ -52,6 +59,11 @@ public sealed class LobbyStateMachine
 
     public IReadOnlyList<LobbyEffect> Apply(StatsMessage message)
     {
+        if (message is UpdateStateMessage tick)
+        {
+            _replayPlaying = tick.Game.Replay == true;
+        }
+
         if (_next is not null || (Holding && StartsNewSession(message)))
         {
             return FollowNext(message);
@@ -95,7 +107,7 @@ public sealed class LobbyStateMachine
             ? IsNewMatch(u.MatchGuid)
             : u.MatchGuid is not null && MatchGuid is not null && u.MatchGuid != MatchGuid),
         PlayerPresenceMessage p => Phase == MatchPhase.Ended && p.Joined && IsNewMatch(p.MatchGuid),
-        MatchEventMessage { Kind: MatchEventKind.MatchCreated } => true,
+        MatchEventMessage { Kind: MatchEventKind.MatchCreated } evt => !IsSameMatch(evt.MatchGuid),
         MatchEventMessage { Kind: MatchEventKind.MatchInitialized or MatchEventKind.RoundStarted } evt =>
             Phase == MatchPhase.Ended && IsNewMatch(evt.MatchGuid),
         _ => false,
@@ -110,13 +122,14 @@ public sealed class LobbyStateMachine
         if (_next is null)
         {
             _next = new LobbyStateMachine { KeepOpenAtKickoff = KeepOpenAtKickoff };
+            _phaseBeforeNext = Phase;
             Phase = MatchPhase.Ended; // whatever was kept is over now
         }
 
         _next.Apply(message);
         if (_next._players.Values.Count(p => !p.Player.HasLeft) >= PlayersForNewGame)
         {
-            return Adopt(_next);
+            return IsSameSession(_next) ? Merge(_next) : Adopt(_next);
         }
 
         if (_next.Phase is MatchPhase.Idle or MatchPhase.Ended)
@@ -127,6 +140,67 @@ public sealed class LobbyStateMachine
         }
 
         return [];
+    }
+
+    /// <summary>
+    /// Is the followed session the kept match itself? Skipping through a replay makes the game create the match again,
+    /// with the same MatchGuid (or, without one, with the same players while a replay plays).
+    /// </summary>
+    private bool IsSameSession(LobbyStateMachine next) =>
+        IsSameMatch(next.MatchGuid)
+        || (_replayPlaying && next.MatchGuid is null && MatchGuid is null && next._players.Keys.All(_players.ContainsKey));
+
+    /// <summary>
+    /// The followed session is the kept match again (a skip in a replay): its players are merged in. The lobby isn't
+    /// cleared, the screen stays as it was (shown or hidden), and the players' pages stay loaded.
+    /// </summary>
+    private List<LobbyEffect> Merge(LobbyStateMachine next)
+    {
+        _next = null;
+        _destroyed = false;
+        Phase = _phaseBeforeNext is MatchPhase.PreKickoff ? MatchPhase.PreKickoff : MatchPhase.Live;
+        MatchGuid ??= next.MatchGuid;
+        var effects = new List<LobbyEffect>();
+        if (next.MatchPlaylistId is { } playlistId && playlistId != MatchPlaylistId)
+        {
+            MatchPlaylistId = playlistId;
+            effects.Add(new MatchPlaylistEffect(playlistId));
+        }
+
+        foreach (var entry in next._players.Values.OrderBy(e => e.Sequence))
+        {
+            var player = entry.Player;
+            if (!_players.TryGetValue(player.Key, out var known))
+            {
+                AddPlayer(player, effects);
+                continue;
+            }
+
+            known.MissedTicks = 0;
+            var team = player.TeamNum >= 0 ? player.TeamNum : known.Player.TeamNum;
+            if (known.Player.TeamNum != team || known.Player.Name != player.Name || known.Player.HasLeft)
+            {
+                var before = known.Player;
+                known.Player = before with { Name = player.Name, TeamNum = team, Id = player.Id, HasLeft = false };
+                effects.Add(new PlayerChangedEffect(before, known.Player));
+            }
+        }
+
+        return effects;
+    }
+
+    /// <summary>
+    /// The same match was created again (MatchCreated with its MatchGuid): a skip in a replay. The
+    /// lobby and the screen stay as they are; after the replay had ended or been left, its roster follows the game again.
+    /// </summary>
+    private void Resume()
+    {
+        if (Phase == MatchPhase.Ended)
+        {
+            Phase = MatchPhase.Live;
+        }
+
+        _destroyed = false;
     }
 
     /// <summary>The followed session has enough players: it replaces the kept lobby, as if it had started normally.</summary>
@@ -215,6 +289,12 @@ public sealed class LobbyStateMachine
         {
             MatchPlaylistId = playlistId;
             effects.Add(new MatchPlaylistEffect(playlistId));
+        }
+
+        if (update.Players.Count == 0)
+        {
+            // Nobody at all: the game is rebuilding the match (a skip in a replay), not everyone leaving at once.
+            return;
         }
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -323,6 +403,12 @@ public sealed class LobbyStateMachine
         switch (evt.Kind)
         {
             case MatchEventKind.MatchCreated:
+                if (IsSameMatch(evt.MatchGuid))
+                {
+                    Resume();
+                    break;
+                }
+
                 if (Phase is MatchPhase.Idle or MatchPhase.Live or MatchPhase.Ended
                     || (evt.MatchGuid is not null && MatchGuid is not null && evt.MatchGuid != MatchGuid))
                 {
@@ -370,6 +456,7 @@ public sealed class LobbyStateMachine
                 {
                     Phase = MatchPhase.Ended;
                     _destroyed = false;
+                    Finished(effects);
                 }
 
                 break;
@@ -383,6 +470,11 @@ public sealed class LobbyStateMachine
 
                 // Keep the roster for after the game. A panel the game popped up (lobby left before kickoff) goes
                 // away; one the user opened with Ctrl+R stays open.
+                if (Phase == MatchPhase.Live)
+                {
+                    Finished(effects); // left (or forfeited) after kickoff: it counts
+                }
+
                 if (Phase != MatchPhase.Idle)
                 {
                     Phase = MatchPhase.Ended;
@@ -398,6 +490,24 @@ public sealed class LobbyStateMachine
                 break;
         }
     }
+
+    /// <summary>
+    /// A match was played to its end or left after kickoff: the players' ratings may have moved. Not for a replay
+    /// of one (the game marks every tick of a replay with bReplay), an offline game (no MatchGuid) or a private
+    /// match or other playlist without a rating (a playlist id the catalog doesn't map); an unknown playlist counts.
+    /// </summary>
+    private void Finished(List<LobbyEffect> effects)
+    {
+        var rated = MatchGuid is not null
+            && !(MatchPlaylistId is { } playlistId && PlaylistCatalog.FromGameId(playlistId) is null);
+        if (!_replayPlaying && rated && _players.Count > 0)
+        {
+            effects.Add(new MatchFinishedEffect(MatchGuid));
+        }
+    }
+
+    /// <summary>Activity with the MatchGuid of the match in the lobby (both known).</summary>
+    private bool IsSameMatch(string? matchGuid) => matchGuid is not null && MatchGuid is not null && matchGuid == MatchGuid;
 
     /// <summary>In the Ended phase: does this activity belong to a different match than the one that ended?</summary>
     private bool IsNewMatch(string? matchGuid) =>

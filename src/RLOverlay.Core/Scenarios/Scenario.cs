@@ -63,6 +63,14 @@ public sealed class ScenarioStep
     /// <summary>Set Game.Ball.TeamNum (last touch). 255 = untouched.</summary>
     public int? TouchBall { get; set; }
 
+    /// <summary>Set Game.bReplay on the ticks from here on (a goal replay, or a Match History replay playing).</summary>
+    public bool? Replay { get; set; }
+
+    /// <summary>
+    /// The MatchGuid from this step on (this step's own event included), e.g. for the next match; empty for none.
+    /// </summary>
+    public string? MatchGuid { get; set; }
+
     /// <summary>Send an arbitrary envelope verbatim.</summary>
     public JsonObject? Raw { get; set; }
 

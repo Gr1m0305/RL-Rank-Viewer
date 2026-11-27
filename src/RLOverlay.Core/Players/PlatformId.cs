@@ -31,6 +31,13 @@ public sealed record PlatformId(Platform Platform, string Uid, int Splitscreen, 
     [JsonIgnore]
     public bool CanLookup => !IsBot && !IsSplitscreenGuest && Platform != Platform.Unknown;
 
+    /// <summary>
+    /// The platform as the game spelled it (the part of <c>PrimaryId</c> before the first <c>|</c>), e.g. <c>Steam</c>.
+    /// Shown for a platform the app doesn't know, so its spelling can be added.
+    /// </summary>
+    [JsonIgnore]
+    public string Prefix => RawPrimaryId.Split('|')[0].Trim();
+
     /// <summary>Stable key for caches: normalised platform, uid and split-screen index.</summary>
     [JsonIgnore]
     public string CacheKey => $"{Platform}|{Uid}|{Splitscreen}".ToLowerInvariant();
@@ -69,19 +76,28 @@ public sealed record PlatformId(Platform Platform, string Uid, int Splitscreen, 
     }
 
     /// <summary>
-    /// Only "Steam" and "Epic" appear in the official docs. The other spellings are best guesses and are matched
-    /// case-insensitively.
+    /// Only "Steam" and "Epic" appear in the official docs. The other spellings are matched case-insensitively, ignoring
+    /// spaces and punctuation (so "Nintendo Switch" and "XBOX_ONE" count too).
     /// </summary>
+    /// <remarks>
+    /// Real lobbies (November 2026) showed PlayStation and Xbox players under one of the spellings below, but never a
+    /// Switch player under "Switch", "Nintendo" or "NNX", so the game uses another name for it. Every name other tools
+    /// use is accepted: "NSwitch"; "OldNNX" (the game's own names for the platform are NNX and OldNNX); and "PsyNet",
+    /// the account kind Switch players' ids have in replay files.
+    /// </remarks>
     public static Platform ParsePlatform(string? value)
     {
-        var v = (value ?? "").Trim().ToLowerInvariant();
+        var v = new string((value ?? "").Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
         return v switch
         {
             "steam" => Platform.Steam,
             "epic" or "epicgames" => Platform.Epic,
             "ps4" or "ps5" or "psn" or "playstation" or "sony" => Platform.PlayStation,
-            "xboxone" or "xbox" or "xbl" or "xboxseries" or "dingo" or "live" => Platform.Xbox,
-            "switch" or "nintendo" or "nnx" => Platform.Switch,
+            "xboxone" or "xbox" or "xbl" or "xboxseries" or "xboxlive" or "dingo" or "live" => Platform.Xbox,
+            "switch" or "nswitch" or "nintendo" or "nintendoswitch" or "nnx" or "oldnnx" or "nx" or "psynet" => Platform.Switch,
+            _ when v.Contains("switch", StringComparison.Ordinal) || v.Contains("nintendo", StringComparison.Ordinal) => Platform.Switch,
+            _ when v.StartsWith("xbox", StringComparison.Ordinal) => Platform.Xbox,
+            _ when v.StartsWith("playstation", StringComparison.Ordinal) => Platform.PlayStation,
             _ => Platform.Unknown,
         };
     }

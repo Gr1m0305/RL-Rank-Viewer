@@ -127,6 +127,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
     private bool _recropPending;
     private bool _disposed;
+    private bool _parked;
     private bool _starting;
     private string _stateNote = "";
     private IDisposable? _turn;
@@ -330,7 +331,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
         }
         else if (_url is null)
         {
-            SetState(TrackerRowState.NoProfile, player.Id.IsBot ? "Bot: no tracker.gg profile" : "Split-screen guest: no tracker.gg profile");
+            SetState(TrackerRowState.NoProfile, NoProfileText(player.Id));
         }
         else
         {
@@ -361,6 +362,19 @@ internal sealed class TrackerRowView : Grid, IDisposable
 
     /// <summary>When the page was last (re)loaded, so old pages can be refreshed for a new match.</summary>
     public DateTime LoadedAt { get; private set; } = DateTime.MinValue;
+
+    /// <summary>
+    /// A match the player was in has finished since the page loaded, so their rating may have moved: the page is loaded
+    /// again before it is shown for another match.
+    /// </summary>
+    public bool Outdated { get; private set; }
+
+    /// <summary>
+    /// Can the page be kept for a while after the player is gone from the screen (see <see cref="Park"/>)? Only a
+    /// loaded one (a row, or tracker.gg's answer that there is none) that no finished match has made outdated.
+    /// </summary>
+    public bool CanPark => HasProfile && !_disposed && !Outdated && _web?.CoreWebView2 is not null
+        && State is TrackerRowState.Cropped or TrackerRowState.NoRow or TrackerRowState.NotFound;
 
     /// <summary>Raised when the row's state or size changed (the screen lines the text bands up with it).</summary>
     public event Action? Changed;
@@ -420,6 +434,12 @@ internal sealed class TrackerRowView : Grid, IDisposable
     }
 
     private void OnStarHover(object? sender, EventArgs e) => RefreshStar();
+
+    /// <summary>Why a player has no tracker.gg page; an unknown platform is named, so its spelling can be added.</summary>
+    private static string NoProfileText(PlatformId id) =>
+        id.IsBot ? "Bot: no tracker.gg profile"
+        : id.IsSplitscreenGuest ? "Split-screen guest: no tracker.gg profile"
+        : $"Unknown platform “{id.Prefix}”: no tracker.gg profile";
 
     private static Brush Frozen(Color color)
     {
@@ -619,6 +639,78 @@ internal sealed class TrackerRowView : Grid, IDisposable
         }
     }
 
+    /// <summary>The match on the screen has finished (see <see cref="Outdated"/>).</summary>
+    public void MarkOutdated() => Outdated = HasProfile && LoadedAt != DateTime.MinValue;
+
+    /// <summary>
+    /// The player is gone from the screen, but may well be back soon (the next match, a replay, the favourites screen):
+    /// the page stays loaded, out of sight, with its scripts paused and its memory trimmed, so it can be shown again at
+    /// once (<see cref="Unpark"/>).
+    /// </summary>
+    public void Park()
+    {
+        _parked = true;
+        _poll.Stop();
+        if (_web?.CoreWebView2 is not { } core)
+        {
+            return;
+        }
+
+        try
+        {
+            core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Overlay: could not trim the memory of {Player}'s kept page", Player.Name);
+        }
+
+        // Pausing needs the browser control out of sight, which it is once the row's collapse has been laid out.
+        _ = Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(async () =>
+        {
+            if (!_parked || _disposed || _web?.CoreWebView2 is not { } page || page.IsSuspended)
+            {
+                return;
+            }
+
+            string result;
+            try
+            {
+                result = await page.TrySuspendAsync() ? "paused" : "running";
+            }
+            catch (Exception ex)
+            {
+                result = $"running: {ex.GetType().Name}";
+                _logger.LogDebug(ex, "Overlay: could not pause {Player}'s kept page", Player.Name);
+            }
+
+            _logger.LogInformation("Overlay: {Player}'s page is kept for a while ({Result})", Player.Name, result);
+        }));
+    }
+
+    /// <summary>The player is back on the screen: the kept page wakes up and is cropped again (no reload).</summary>
+    public void Unpark()
+    {
+        _parked = false;
+        if (_web?.CoreWebView2 is { } core)
+        {
+            try
+            {
+                core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal;
+                if (core.IsSuspended)
+                {
+                    core.Resume();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Overlay: could not wake {Player}'s kept page", Player.Name);
+            }
+        }
+
+        Recrop();
+    }
+
     public void Reload()
     {
         if (_web?.CoreWebView2 is null)
@@ -666,6 +758,7 @@ internal sealed class TrackerRowView : Grid, IDisposable
         _viewport = ViewportWidth; // tracker.gg's columns are measured at the usual desktop width
         _loadStarted = DateTime.UtcNow;
         LoadedAt = DateTime.UtcNow;
+        Outdated = false;
         SetState(TrackerRowState.Loading, "Loading tracker.gg…");
         _logger.LogInformation("Overlay: loading {Url}", _url);
         core.Navigate(_url);

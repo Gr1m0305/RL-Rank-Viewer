@@ -142,6 +142,15 @@ public sealed partial class PanelViewModel : ObservableObject
     /// <summary>Raised by <see cref="Refresh"/> after <see cref="ShownPlayers"/> was recomputed.</summary>
     public event Action? RosterRefreshed;
 
+    /// <summary>
+    /// The match the shown players were in has finished (or was left after kickoff), so their ratings may have moved:
+    /// pages loaded before it are loaded again when they are shown for another match.
+    /// </summary>
+    public event Action? MatchFinished;
+
+    /// <summary>See <see cref="MatchFinished"/>.</summary>
+    public void FinishMatch() => MatchFinished?.Invoke();
+
     public void ApplySettings(OverlaySettings settings)
     {
         Columns = new StatColumns

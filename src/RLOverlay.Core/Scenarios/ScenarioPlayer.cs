@@ -19,6 +19,7 @@ public static class ScenarioPlayer
         var end = steps.Count == 0 ? 0 : steps.Max(s => s.At);
 
         var roster = new List<RosterEntry>();
+        var session = new Session { MatchGuid = scenario.MatchGuid };
         var ballTeam = 255;
         var ticking = false;
         var output = new List<TimedMessage>();
@@ -34,7 +35,7 @@ public static class ScenarioPlayer
             if (nextStepAt <= tickDue)
             {
                 var step = steps[stepIndex++];
-                ApplyStep(scenario, step, roster, ref ballTeam, ref ticking, output);
+                ApplyStep(scenario, step, session, roster, ref ballTeam, ref ticking, output);
                 if (ticking && nextTick < step.At)
                 {
                     nextTick = step.At;
@@ -43,7 +44,7 @@ public static class ScenarioPlayer
                 continue;
             }
 
-            output.Add(new TimedMessage(tickDue, Envelope(scenario, "UpdateState", UpdateStateData(scenario, roster, ballTeam, tickDue))));
+            output.Add(new TimedMessage(tickDue, Envelope(scenario, "UpdateState", UpdateStateData(scenario, session, roster, ballTeam, tickDue))));
             nextTick = tickDue + tickInterval;
         }
 
@@ -53,6 +54,7 @@ public static class ScenarioPlayer
     private static void ApplyStep(
         Scenario scenario,
         ScenarioStep step,
+        Session session,
         List<RosterEntry> roster,
         ref int ballTeam,
         ref bool ticking,
@@ -68,6 +70,16 @@ public static class ScenarioPlayer
             ballTeam = team;
         }
 
+        if (step.MatchGuid is { } guid)
+        {
+            session.MatchGuid = guid.Length > 0 ? guid : null;
+        }
+
+        if (step.Replay is { } replay)
+        {
+            session.Replay = replay;
+        }
+
         if (step.Join is { } join)
         {
             var entry = new RosterEntry(join.Name, join.PrimaryId ?? "", join.Team, step.At + Math.Max(0, join.ConnectingMs), roster.Count + 1);
@@ -77,7 +89,7 @@ public static class ScenarioPlayer
                 ["PlayerName"] = join.Name,
                 ["PrimaryId"] = join.PrimaryId ?? "",
             };
-            output.Add(new TimedMessage(step.At, Envelope(scenario, "PlayerJoined", WithGuid(scenario, data))));
+            output.Add(new TimedMessage(step.At, Envelope(scenario, "PlayerJoined", WithGuid(session, data))));
             ticking = true;
         }
 
@@ -92,7 +104,7 @@ public static class ScenarioPlayer
                     ["PlayerName"] = entry.Name,
                     ["PrimaryId"] = entry.PrimaryId,
                 };
-                output.Add(new TimedMessage(step.At, Envelope(scenario, "PlayerLeft", WithGuid(scenario, data))));
+                output.Add(new TimedMessage(step.At, Envelope(scenario, "PlayerLeft", WithGuid(session, data))));
             }
         }
 
@@ -104,7 +116,7 @@ public static class ScenarioPlayer
         if (step.Event is { Length: > 0 } evt)
         {
             var data = step.Data is null ? new JsonObject() : (JsonObject)step.Data.DeepClone();
-            output.Add(new TimedMessage(step.At, Envelope(scenario, evt, WithGuid(scenario, data))));
+            output.Add(new TimedMessage(step.At, Envelope(scenario, evt, WithGuid(session, data))));
             switch (evt)
             {
                 case "MatchCreated":
@@ -129,9 +141,9 @@ public static class ScenarioPlayer
         roster.FirstOrDefault(r => r.PrimaryId.Equals(idOrName, StringComparison.OrdinalIgnoreCase))
         ?? roster.FirstOrDefault(r => r.Name.Equals(idOrName, StringComparison.OrdinalIgnoreCase));
 
-    private static JsonObject WithGuid(Scenario scenario, JsonObject data)
+    private static JsonObject WithGuid(Session session, JsonObject data)
     {
-        if (scenario.MatchGuid is { } guid && !data.ContainsKey("MatchGuid"))
+        if (session.MatchGuid is { } guid && !data.ContainsKey("MatchGuid"))
         {
             var copy = new JsonObject { ["MatchGuid"] = guid };
             foreach (var (k, v) in data)
@@ -145,7 +157,7 @@ public static class ScenarioPlayer
         return data;
     }
 
-    private static JsonObject UpdateStateData(Scenario scenario, List<RosterEntry> roster, int ballTeam, int atMs)
+    private static JsonObject UpdateStateData(Scenario scenario, Session session, List<RosterEntry> roster, int ballTeam, int atMs)
     {
         var players = new JsonArray();
         foreach (var p in roster.Where(r => r.VisibleFromMs <= atMs))
@@ -175,7 +187,7 @@ public static class ScenarioPlayer
             ["TimeSeconds"] = 300,
             ["bOvertime"] = false,
             ["Ball"] = new JsonObject { ["Speed"] = 0, ["TeamNum"] = ballTeam },
-            ["bReplay"] = false,
+            ["bReplay"] = session.Replay,
             ["bHasWinner"] = false,
             ["Winner"] = "",
             ["Arena"] = scenario.Arena,
@@ -186,7 +198,7 @@ public static class ScenarioPlayer
             game["PlaylistId"] = playlistId;
         }
 
-        return WithGuid(scenario, new JsonObject { ["Players"] = players, ["Game"] = game });
+        return WithGuid(session, new JsonObject { ["Players"] = players, ["Game"] = game });
     }
 
     private static string Envelope(Scenario scenario, string eventName, JsonObject data)
@@ -194,6 +206,14 @@ public static class ScenarioPlayer
         var envelope = new JsonObject { ["Event"] = eventName };
         envelope["Data"] = scenario.DataAsString ? JsonValue.Create(data.ToJsonString()) : data;
         return envelope.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
+    }
+
+    /// <summary>What a step can change for the steps and ticks after it: the match and whether a replay plays.</summary>
+    private sealed class Session
+    {
+        public string? MatchGuid { get; set; }
+
+        public bool Replay { get; set; }
     }
 
     private sealed class RosterEntry(string name, string primaryId, int team, int visibleFromMs, int shortcut)

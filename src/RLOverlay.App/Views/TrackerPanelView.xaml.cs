@@ -25,13 +25,27 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     private static readonly TimeSpan RiseDuration = TimeSpan.FromMilliseconds(320);
     private static readonly TimeSpan Stagger = TimeSpan.FromMilliseconds(55);
 
-    /// <summary>A kept player's page is loaded again at the next match if it is older than this.</summary>
-    private static readonly TimeSpan ReloadForNewMatchAfter = TimeSpan.FromMinutes(1);
+    /// <summary>
+    /// A player's page is shown again without loading it again for this long after it loaded: back on the screen within
+    /// it (the next match, a replay, the favourites screen), the player's row is there at once. A finished match they were
+    /// in makes it outdated sooner (their rating may have moved).
+    /// </summary>
+    internal static readonly TimeSpan ReusePagesFor = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// At most this many pages of players gone from the screen are kept for <see cref="ReusePagesFor"/>: one whole 3v3
+    /// lobby. Each kept page is paused but still holds some memory.
+    /// </summary>
+    internal const int MaxKeptPages = 6;
 
     private static Task<CoreWebView2Environment>? s_environment;
 
     private readonly Dictionary<string, TrackerRowView> _rows = new();
     private readonly Dictionary<string, bool> _sampleRows = new();
+
+    // Rows of players gone from the screen, kept (collapsed, page paused) in case they come back soon.
+    private readonly Dictionary<string, TrackerRowView> _kept = new();
+    private readonly DispatcherTimer _keptTimer = new() { Interval = TimeSpan.FromSeconds(20) };
     private readonly TeamBlock _blue;
     private readonly TeamBlock _orange;
     private readonly TeamBlock _other;
@@ -54,6 +68,7 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
         _orange = new TeamBlock(this, "ORANGE", "AccentOrange");
         _other = new TeamBlock(this, "JOINING", "TextMuted");
         _favourites = new TeamBlock(this, "FAVOURITES", "FavouriteGold");
+        _keptTimer.Tick += (_, _) => DropOldPages();
         if (marks is not null)
         {
             marks.Changed += OnFavouritesChanged;
@@ -154,6 +169,7 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
         {
             _vm.PropertyChanged -= OnViewModelPropertyChanged;
             _vm.RosterRefreshed -= Rebuild;
+            _vm.MatchFinished -= OnMatchFinished;
         }
 
         _vm = DataContext as PanelViewModel;
@@ -161,6 +177,7 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
         {
             _vm.PropertyChanged += OnViewModelPropertyChanged;
             _vm.RosterRefreshed += Rebuild;
+            _vm.MatchFinished += OnMatchFinished;
             FooterRow.Visibility = _vm.IsFavourites ? Visibility.Collapsed : Visibility.Visible;
             FavouritesFooter.Visibility = _vm.IsFavourites ? Visibility.Visible : Visibility.Collapsed;
             ShowPageSize();
@@ -211,6 +228,15 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
         }
     }
 
+    /// <summary>The match on the screen has finished: its players' pages are loaded again for their next match.</summary>
+    private void OnMatchFinished()
+    {
+        foreach (var row in _rows.Values)
+        {
+            row.MarkOutdated();
+        }
+    }
+
     private void OnFavouritesChanged()
     {
         foreach (var row in _rows.Values)
@@ -240,8 +266,9 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
     }
 
     /// <summary>
-    /// The roster changed. Players no longer in it (a new match) are removed and their page closed; players who left the
-    /// match stay, marked as left; new players get a row whose page starts loading right away, so it's ready by the time
+    /// The roster changed. Players no longer in it (a new match) are removed, their page kept for a while in case they
+    /// come back (see <see cref="ReusePagesFor"/>); players who left the match stay, marked as left; new players get
+    /// their kept row back if there is one, else a row whose page starts loading right away, so it's ready by the time
     /// anyone looks.
     /// </summary>
     private void Rebuild()
@@ -258,8 +285,7 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
             var old = _rows[gone];
             _rows.Remove(gone);
             _sampleRows.Remove(gone);
-            RowsHost.Children.Remove(old);
-            old.Dispose();
+            KeepOrClose(gone, old);
         }
 
         var newMatch = _vm.MatchNumber != _matchNumber;
@@ -270,10 +296,14 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
             if (_rows.TryGetValue(player.Key, out var row))
             {
                 row.Update(player);
-                if (newMatch && row.LoadedAt != DateTime.MinValue && DateTime.UtcNow - row.LoadedAt > ReloadForNewMatchAfter)
+                if (newMatch && IsStale(row))
                 {
                     row.Reload(); // their rank may have moved since the last match
                 }
+            }
+            else if (!_vm.IsSample && _kept.Remove(player.Key, out var kept))
+            {
+                Reuse(kept, player);
             }
             else
             {
@@ -300,6 +330,90 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
                 }
             });
         }
+    }
+
+    /// <summary>
+    /// Does a page need loading again before it is shown for another match? Yes once it is older than
+    /// <see cref="ReusePagesFor"/>, after a finished match the player was in, or when it never got to a row.
+    /// </summary>
+    private static bool IsStale(TrackerRowView row) =>
+        row.HasProfile && row.LoadedAt != DateTime.MinValue
+        && (row.Outdated || DateTime.UtcNow - row.LoadedAt > ReusePagesFor
+            || row.State is TrackerRowState.Failed or TrackerRowState.ShowingPage);
+
+    /// <summary>A player gone from the screen: their row is kept, out of sight, if its page can be shown again; else closed.</summary>
+    private void KeepOrClose(string key, TrackerRowView row)
+    {
+        if (_disposed || !row.CanPark || IsStale(row))
+        {
+            Close(row);
+            return;
+        }
+
+        if (_kept.Remove(key, out var older))
+        {
+            Close(older);
+        }
+
+        row.Visibility = Visibility.Collapsed;
+        row.Park();
+        _kept[key] = row;
+        DropOldPages();
+        if (_kept.Count > 0)
+        {
+            _keptTimer.Start();
+        }
+    }
+
+    /// <summary>
+    /// A player is back on the screen while their page is kept: the row shows again at once, cropped for the screen's
+    /// playlist and stats, and is only loaded again if it has gone stale meanwhile (see <see cref="IsStale"/>).
+    /// </summary>
+    private void Reuse(TrackerRowView row, LobbyPlayer player)
+    {
+        _rows[player.Key] = row;
+        _sampleRows[player.Key] = false;
+        row.Visibility = Visibility.Visible;
+        row.Update(player);
+        row.SetZoom(_zoom);
+        row.Unpark();
+        row.SetLabel(_vm!.RowLabel);
+        row.SetOptions(_vm.CropOptions);
+        if (IsStale(row))
+        {
+            row.Reload();
+            return;
+        }
+
+        _logger.LogInformation("Overlay: {Player}'s page from {Seconds:0} s ago is shown again, no reload",
+            player.Name, (DateTime.UtcNow - row.LoadedAt).TotalSeconds);
+    }
+
+    /// <summary>Kept pages that have gone stale are closed, and the oldest ones beyond <see cref="MaxKeptPages"/>.</summary>
+    private void DropOldPages()
+    {
+        foreach (var key in _kept.Where(k => IsStale(k.Value)).Select(k => k.Key).ToList())
+        {
+            Close(_kept[key]);
+            _kept.Remove(key);
+        }
+
+        foreach (var key in _kept.OrderBy(k => k.Value.LoadedAt).Take(Math.Max(0, _kept.Count - MaxKeptPages)).Select(k => k.Key).ToList())
+        {
+            Close(_kept[key]);
+            _kept.Remove(key);
+        }
+
+        if (_kept.Count == 0)
+        {
+            _keptTimer.Stop();
+        }
+    }
+
+    private void Close(TrackerRowView row)
+    {
+        RowsHost.Children.Remove(row);
+        row.Dispose();
     }
 
     /// <summary>
@@ -442,12 +556,14 @@ public partial class TrackerPanelView : UserControl, IRevealable, IDisposable
             _marks.Changed -= OnFavouritesChanged;
         }
 
-        foreach (var row in _rows.Values)
+        _keptTimer.Stop();
+        foreach (var row in _rows.Values.Concat(_kept.Values))
         {
             row.Dispose();
         }
 
         _rows.Clear();
+        _kept.Clear();
         _sampleRows.Clear();
     }
 

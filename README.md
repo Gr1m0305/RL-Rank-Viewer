@@ -63,11 +63,17 @@ or sent anywhere else.
 
 * Pages start loading as soon as a player joins, so they are usually ready by the time you look. A shimmer marks
   rows still loading; *Refresh* in the header loads every player's page again at once (it is greyed out while there
-  is nothing to reload). At the next match, pages older than a minute reload by themselves.
+  is nothing to reload).
+* A player's page is used for 5 minutes after it loaded. When they show up again in that time (the next match, a
+  replay, a lobby you left and came back to), their row is there at once, without loading the page again. Pages older
+  than that load again, and so do the pages of everyone in a match that was played to the end, since their ratings
+  may have moved (not after private matches or offline games). Up to six pages of players who have gone are kept
+  for those 5 minutes, paused so they cost no CPU.
 * Each name has its platform's mark in front of it: Steam, Epic Games, PlayStation, Xbox or Nintendo Switch. Bots
   say *BOT*.
 * *No Hoops rating on tracker.gg* (for example): that player has no row for that playlist. *Not found on
-  tracker.gg*: there is no profile under that name. Bots and split-screen guests have no profile.
+  tracker.gg*: there is no profile under that name. Bots and split-screen guests have no profile. *Unknown
+  platform* means the game named a platform the app doesn't know yet; the log says which (tray → *Open logs folder*).
 * If a player's page has no cell that others have (a new player without a peak, say), their row leaves a gap there so
   the columns still line up.
 * If a row hasn't appeared after 12 s, that line shows tracker.gg's whole page (smaller) so you can see what is
@@ -165,6 +171,8 @@ Stats API on.
 * At kickoff the lobby fades out. `Ctrl+R` brings it back mid-match; the next kickoff hides it again. To keep it on
   screen for the whole match (handy on a second screen), turn on Settings → *In a match* → *Keep the lobby open when
   the match starts*: then only `Ctrl+R` hides it, or leaving the match.
+* **Replays:** skipping forwards or back in a replay doesn't reset the lobby. Hidden stays hidden, and no page loads
+  again.
 * **Players who leave** (quitters, dropped connections) stay on the board, dimmed and marked *left the match*, and
   the team header counts them (*1 / 2 · 1 left*). They go with the rest of the lobby when the next game starts; if
   they come back, the mark goes.

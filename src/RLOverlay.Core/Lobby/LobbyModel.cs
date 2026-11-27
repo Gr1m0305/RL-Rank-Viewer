@@ -70,5 +70,11 @@ public sealed record PanelVisibilityEffect(bool Visible, PanelChangeReason Reaso
 /// <summary>The game reported the match's playlist id (Game.PlaylistId).</summary>
 public sealed record MatchPlaylistEffect(int PlaylistId) : LobbyEffect;
 
+/// <summary>
+/// The match was played to its end (or left after kickoff), so the players' ratings may have moved. Not raised for
+/// replays, offline games or private matches (nothing there changes a rating).
+/// </summary>
+public sealed record MatchFinishedEffect(string? MatchGuid) : LobbyEffect;
+
 /// <summary>Roster cleared: a new match is starting, or the connection was lost (game closed). Back to Idle.</summary>
 public sealed record LobbyClearedEffect(PanelChangeReason Reason) : LobbyEffect;
