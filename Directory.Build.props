@@ -6,7 +6,7 @@
     <Deterministic>true</Deterministic>
     <Company>Gr1m</Company>
     <Product>Gr1m's RL Overlay</Product>
-    <Version>0.9.1</Version>
+    <Version>0.9.2</Version>
     <!-- Only the .NET 10 SDK may be installed; it still builds net8.0 targets. -->
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
   </PropertyGroup>
